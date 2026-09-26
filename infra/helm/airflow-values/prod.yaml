@@ -1,0 +1,17 @@
+# Prod overrides: full resources
+scheduler:
+  resources:
+    requests: { cpu: "1",     memory: "1Gi"   }
+    limits:   { cpu: "2",     memory: "2Gi"   }
+webserver:
+  resources:
+    requests: { cpu: "500m", memory: "512Mi" }
+    limits:   { cpu: "1",     memory: "1Gi"   }
+config:
+  webserver:
+    base_url: "https://eq-tech.<LB_IP>.nip.io/airflow"
+ingress:
+  web:
+    hosts:
+      - name: "eq-tech.<LB_IP>.nip.io"
+    path: "/airflow"

@@ -1,0 +1,90 @@
+name: Airflow Helm Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/helm/airflow-values.yaml"
+      - "infra/helm/airflow-values/**"
+      - "data/airflow/docker/**"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-dev:
+    name: Helm Upgrade Airflow – dev
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - run: az aks get-credentials --resource-group eq-tech-rg --name eq-tech-aks --overwrite-existing
+      - uses: azure/setup-helm@v4
+      - run: helm repo add apache-airflow https://airflow.apache.org && helm repo update
+      - name: Helm Upgrade Airflow (dev)
+        run: |
+          helm upgrade --install airflow-dev apache-airflow/airflow \
+            --namespace dev-airflow \
+            --create-namespace \
+            -f infra/helm/airflow-values.yaml \
+            -f infra/helm/airflow-values/dev.yaml \
+            --timeout 10m \
+            --atomic
+
+  deploy-uat:
+    name: Helm Upgrade Airflow – uat
+    runs-on: ubuntu-latest
+    environment: uat
+    needs: [deploy-dev]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - run: az aks get-credentials --resource-group eq-tech-rg --name eq-tech-aks --overwrite-existing
+      - uses: azure/setup-helm@v4
+      - run: helm repo add apache-airflow https://airflow.apache.org && helm repo update
+      - name: Helm Upgrade Airflow (uat)
+        run: |
+          helm upgrade --install airflow-uat apache-airflow/airflow \
+            --namespace uat-airflow \
+            --create-namespace \
+            -f infra/helm/airflow-values.yaml \
+            -f infra/helm/airflow-values/uat.yaml \
+            --timeout 10m \
+            --atomic
+
+  deploy-prod:
+    name: Helm Upgrade Airflow – prod
+    runs-on: ubuntu-latest
+    environment: prod
+    needs: [deploy-uat]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - run: az aks get-credentials --resource-group eq-tech-rg --name eq-tech-aks --overwrite-existing
+      - uses: azure/setup-helm@v4
+      - run: helm repo add apache-airflow https://airflow.apache.org && helm repo update
+      - name: Helm Upgrade Airflow (prod)
+        run: |
+          helm upgrade --install airflow-prod apache-airflow/airflow \
+            --namespace prod-airflow \
+            --create-namespace \
+            -f infra/helm/airflow-values.yaml \
+            -f infra/helm/airflow-values/prod.yaml \
+            --timeout 10m \
+            --atomic

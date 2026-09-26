@@ -1,0 +1,83 @@
+# Replace <LB_IP> with the NGINX Ingress LoadBalancer external IP before deploying.
+# Deploy with: helm upgrade -f airflow-values.yaml -f airflow-values/<env>.yaml
+
+airflowVersion: "2.9.3"
+images:
+  airflow:
+    repository: apache/airflow
+    tag: "2.9.3"
+    pullPolicy: IfNotPresent
+
+executor: "KubernetesExecutor"
+
+# Use external Azure PostgreSQL – disable bundled Postgres
+postgresql:
+  enabled: false
+
+data:
+  metadataSecretName: "airflow-postgres-secret"
+
+# git-sync: automatically pulls DAGs from the monorepo every 30 seconds
+dags:
+  gitSync:
+    enabled: true
+    repo: "https://github.com/ColumbiaDataScienceCorporation/eq_tech.git"
+    branch: "main"
+    subPath: "data/airflow/dags"
+    depth: 1
+    wait: 30
+    credentialsSecret: "github-git-sync-token"
+
+# Webserver exposed only within the cluster – NGINX Ingress + OAuth2 Proxy handles external access
+webserver:
+  service:
+    type: ClusterIP
+  defaultUser:
+    enabled: true
+    role: Admin
+    username: admin
+    email: jin_xin1@hotmail.com
+    firstName: Jin
+    lastName: Xin
+    password: "ChangeMe123!"
+
+# Base scheduler resources – overridden per environment in airflow-values/<env>.yaml
+scheduler:
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+workers:
+  serviceAccount:
+    create: true
+
+# AIRFLOW_NAMESPACE is read by k8s_pod_operator_dag.py to target the correct namespace
+extraEnv:
+  - name: AIRFLOW_NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+
+# base_url is overridden per environment in airflow-values/<env>.yaml
+config:
+  webserver:
+    base_url: "https://eq-tech.<LB_IP>.nip.io/airflow"
+
+# Ingress protected by OAuth2 Proxy (auth-url annotation triggers the external-auth flow)
+ingress:
+  web:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local/oauth2/auth"
+      nginx.ingress.kubernetes.io/auth-signin: "https://eq-tech.<LB_IP>.nip.io/oauth2/start?rd=$escaped_request_uri"
+      nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups"
+    hosts:
+      - name: "eq-tech.<LB_IP>.nip.io"
+        tls:
+          enabled: false
+    path: "/airflow"

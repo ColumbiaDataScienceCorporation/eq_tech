@@ -1,0 +1,9 @@
+# Prod environment OAuth2 Proxy overrides
+extraArgs:
+  redirect-url: "https://eq-tech.<LB_IP>.nip.io/oauth2/callback"
+ingress:
+  hosts:
+    - host: "eq-tech.<LB_IP>.nip.io"
+      paths:
+        - path: /oauth2
+          pathType: Prefix

@@ -1,0 +1,88 @@
+name: Infrastructure CI/CD (Terraform)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/terraform/**"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-dev:
+    name: Terraform – dev
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure Login (OIDC – no stored credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.x"
+      - run: terraform init
+        working-directory: infra/terraform
+      - name: Terraform Apply (dev)
+        working-directory: infra/terraform
+        run: |
+          terraform workspace select dev || terraform workspace new dev
+          terraform apply -auto-approve \
+            -var-file environments/dev.tfvars \
+            -var "postgres_admin_password=${{ secrets.PG_ADMIN_PASSWORD }}"
+
+  deploy-uat:
+    name: Terraform – uat
+    runs-on: ubuntu-latest
+    environment: uat
+    needs: [deploy-dev]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.x"
+      - run: terraform init
+        working-directory: infra/terraform
+      - name: Terraform Apply (uat)
+        working-directory: infra/terraform
+        run: |
+          terraform workspace select uat || terraform workspace new uat
+          terraform apply -auto-approve \
+            -var-file environments/uat.tfvars \
+            -var "postgres_admin_password=${{ secrets.PG_ADMIN_PASSWORD }}"
+
+  deploy-prod:
+    name: Terraform – prod
+    runs-on: ubuntu-latest
+    environment: prod
+    needs: [deploy-uat]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.x"
+      - run: terraform init
+        working-directory: infra/terraform
+      - name: Terraform Apply (prod)
+        working-directory: infra/terraform
+        run: |
+          terraform workspace select prod || terraform workspace new prod
+          terraform apply -auto-approve \
+            -var-file environments/prod.tfvars \
+            -var "postgres_admin_password=${{ secrets.PG_ADMIN_PASSWORD }}"

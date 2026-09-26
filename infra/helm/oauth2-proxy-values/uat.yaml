@@ -1,0 +1,9 @@
+# UAT environment OAuth2 Proxy overrides
+extraArgs:
+  redirect-url: "https://uat.eq-tech.<LB_IP>.nip.io/oauth2/callback"
+ingress:
+  hosts:
+    - host: "uat.eq-tech.<LB_IP>.nip.io"
+      paths:
+        - path: /oauth2
+          pathType: Prefix

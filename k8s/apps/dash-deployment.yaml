@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dash-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dash-app
+  template:
+    metadata:
+      labels:
+        app: dash-app
+    spec:
+      containers:
+        - name: dash-app
+          image: eqtechacr.azurecr.io/ui-dash:latest
+          ports:
+            - containerPort: 8050
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8050
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dash-service
+spec:
+  selector:
+    app: dash-app
+  ports:
+    - port: 8050
+      targetPort: 8050
+  type: ClusterIP

@@ -1,0 +1,38 @@
+# auth is shared – one OAuth2 Proxy instance serves all environments
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: auth
+---
+# dev
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev-airflow
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev-apps
+---
+# uat
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: uat-airflow
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: uat-apps
+---
+# prod
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prod-airflow
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prod-apps

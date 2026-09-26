@@ -1,0 +1,39 @@
+# Base template only – do NOT apply this file directly.
+# Use the environment-specific files: dev.yaml, uat.yaml, prod.yaml
+# Each file is applied with: kubectl apply -f k8s/ingress/<env>.yaml -n <env>-apps
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: eq-tech-ingress
+  annotations:
+    # All routes require Entra ID SSO via OAuth2 Proxy
+    nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://eq-tech.<LB_IP>.nip.io/oauth2/start?rd=$escaped_request_uri"
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: "eq-tech.<LB_IP>.nip.io"
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-service
+                port:
+                  number: 8000
+          - path: /dash
+            pathType: Prefix
+            backend:
+              service:
+                name: dash-service
+                port:
+                  number: 8050
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-service
+                port:
+                  number: 80

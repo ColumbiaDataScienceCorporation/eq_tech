@@ -1,0 +1,17 @@
+# Dev overrides: reduced resources for the trial cluster
+scheduler:
+  resources:
+    requests: { cpu: "250m", memory: "256Mi" }
+    limits:   { cpu: "500m", memory: "512Mi" }
+webserver:
+  resources:
+    requests: { cpu: "250m", memory: "256Mi" }
+    limits:   { cpu: "500m", memory: "512Mi" }
+config:
+  webserver:
+    base_url: "https://dev.eq-tech.<LB_IP>.nip.io/airflow"
+ingress:
+  web:
+    hosts:
+      - name: "dev.eq-tech.<LB_IP>.nip.io"
+    path: "/airflow"

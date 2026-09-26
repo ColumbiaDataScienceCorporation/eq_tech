@@ -112,7 +112,33 @@ eq_tech/
 │   │   ├── dash-deployment.yaml
 │   │   └── web-deployment.yaml
 │   └── ingress/
-│       └── ingress.yaml
+│       ├── dev.yaml
+│       ├── uat.yaml
+│       └── prod.yaml
+├── lib/                                        # Shared library – imported by all apps and DAGs
+│   ├── config/
+│   │   └── settings.py                         # Pydantic Settings: env-aware credentials & config
+│   ├── db/
+│   │   ├── postgres.py                         # SQLAlchemy engine + session context-manager
+│   │   ├── snowflake_client.py                 # Snowflake SQLAlchemy engine
+│   │   └── models/
+│   │       ├── base.py                         # Declarative base shared by all ORM models
+│   │       └── portfolio.py                    # PortfolioPosition ORM model
+│   ├── auth/
+│   │   └── groups.py                           # AD group auth: FastAPI dep + Flask hook
+│   ├── logging/
+│   │   └── structured.py                       # JSON-structured logger (Azure Monitor ready)
+│   ├── storage/
+│   │   └── azure_blob.py                       # Azure Blob Storage client (workload identity)
+│   ├── calendar/
+│   │   └── trading_calendar.py                 # US market business-day utilities
+│   ├── market_data/
+│   │   └── client.py                           # Abstract market data interface + CSV/REST adapters
+│   ├── notifications/
+│   │   └── teams.py                            # Microsoft Teams webhook alerts
+│   └── portfolio/
+│       └── metrics.py                          # Returns, vol, Sharpe, VaR, drawdown, position summary
+│                                               # (add further business logic modules here)
 ├── requirements/
 │   ├── dev.txt                         # Installed on the central dev server shared venv
 │   ├── api.txt                         # Mirror of apps/api/requirements.txt
@@ -176,6 +202,21 @@ gunicorn==22.0.0
 
 # Kubernetes client (for DAG authoring and local testing)
 kubernetes>=29.0.0
+
+# lib/config
+pydantic-settings>=2.3.0
+
+# lib/db
+psycopg2-binary>=2.9.9
+sqlalchemy>=2.0.30
+snowflake-sqlalchemy>=1.6.0
+
+# lib/storage
+azure-storage-blob>=12.20.0
+azure-identity>=1.17.0
+
+# lib/market_data (CSV/parquet handling)
+pandas>=2.2.0
 
 # Dev tooling
 pytest>=8.0.0
@@ -767,7 +808,8 @@ helm repo update
 
 helm upgrade --install oauth2-proxy oauth2-proxy/oauth2-proxy \
   --namespace auth \
-  -f infra/helm/oauth2-proxy-values.yaml
+  -f infra/helm/oauth2-proxy-values.yaml \
+  -f infra/helm/oauth2-proxy-values/dev.yaml
 ```
 
 ---
@@ -1114,67 +1156,127 @@ with DAG(
 ```
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
+# lib dependencies (already in the shared venv on the dev server)
+pydantic-settings>=2.3.0
+psycopg2-binary>=2.9.9
+sqlalchemy>=2.0.30
 ```
 
 **`apps/api/main.py`**
 
 ```python
-from fastapi import FastAPI, Request, HTTPException
+from datetime import date
+
+from fastapi import Depends, FastAPI, Request
+
+from lib.auth.groups import get_request_email, get_request_user, require_groups
+from lib.config.settings import get_settings
+from lib.db.models import PortfolioPosition, init_db
+from lib.db.postgres import get_db_session, health_check as pg_health
+from lib.logging.structured import get_logger
+from lib.portfolio.metrics import summarise_positions
+
+log = get_logger(__name__)
+settings = get_settings()
 
 app = FastAPI(title="EQ Tech API", version="1.0.0")
 
-# Replace with your actual Entra ID Security Group Object ID
-ANALYSTS_GROUP_ID = "REPLACE_WITH_ENTRA_GROUP_OBJECT_ID"
 
-
-def get_user_groups(request: Request) -> list[str]:
-    header = request.headers.get("X-Auth-Request-Groups", "")
-    return [g.strip() for g in header.split(",") if g.strip()]
+@app.on_event("startup")
+def startup() -> None:
+    """Create DB tables on startup if they don't exist yet."""
+    init_db()
+    log.info("API started", environment=settings.environment.value)
 
 
 @app.get("/healthz")
 def health_check():
-    """Liveness probe endpoint – unauthenticated."""
-    return {"status": "healthy"}
+    """Liveness probe – unauthenticated."""
+    return {"status": "healthy", "db": "ok" if pg_health() else "unreachable"}
 
 
 @app.get("/api/v1/me")
 def whoami(request: Request):
-    """Returns the authenticated user's identity details."""
+    """Returns the authenticated user's identity and group memberships."""
     return {
-        "user":   request.headers.get("X-Auth-Request-User", "unknown"),
-        "email":  request.headers.get("X-Auth-Request-Email", "unknown"),
-        "groups": get_user_groups(request),
+        "user":   get_request_user(request),
+        "email":  get_request_email(request),
+        "groups": request.headers.get("X-Auth-Request-Groups", "").split(","),
     }
 
 
 @app.get("/api/v1/portfolio")
-def get_portfolio(request: Request):
-    """Returns sample portfolio data. Requires membership in ANALYSTS_GROUP_ID."""
-    groups = get_user_groups(request)
-    if ANALYSTS_GROUP_ID not in groups:
-        raise HTTPException(status_code=403, detail="Insufficient group membership")
+def get_portfolio(
+    request: Request,
+    portfolio_id: str = "P001",
+    # Requires caller to be in the analysts OR admins Entra group
+    _groups=require_groups(settings.analysts_group_id, settings.admins_group_id),
+):
+    """
+    Returns live portfolio positions from PostgreSQL and computes a summary.
+    Uses lib.db for DB access, lib.auth for group gate, lib.portfolio for analytics.
+    """
+    with get_db_session() as session:
+        rows = (
+            session.query(PortfolioPosition)
+            .filter(
+                PortfolioPosition.portfolio_id == portfolio_id,
+                PortfolioPosition.as_of_date == date.today(),
+            )
+            .all()
+        )
+
+    if not rows:
+        # Return synthetic data when the table is empty (demo / first run)
+        positions = [
+            {"portfolio_id": portfolio_id, "symbol": "AAPL", "quantity": 100,
+             "cost_basis": 150.0, "market_price": 185.5},
+            {"portfolio_id": portfolio_id, "symbol": "MSFT", "quantity": 50,
+             "cost_basis": 300.0, "market_price": 415.2},
+            {"portfolio_id": portfolio_id, "symbol": "GOOG", "quantity": 75,
+             "cost_basis": 140.0, "market_price": 175.8},
+        ]
+    else:
+        positions = [
+            {
+                "portfolio_id": r.portfolio_id,
+                "symbol": r.symbol,
+                "quantity": r.quantity,
+                "cost_basis": r.cost_basis,
+                "market_price": r.market_price,
+            }
+            for r in rows
+        ]
+
+    summary = summarise_positions(positions)
+    log.info("Portfolio retrieved",
+             user=get_request_user(request),
+             portfolio_id=portfolio_id,
+             num_positions=len(positions))
     return {
-        "user": request.headers.get("X-Auth-Request-User", "unknown"),
-        "portfolio": [
-            {"symbol": "AAPL", "weight": 0.30},
-            {"symbol": "MSFT", "weight": 0.25},
-            {"symbol": "GOOG", "weight": 0.20},
-            {"symbol": "AMZN", "weight": 0.25},
-        ],
+        "portfolio_id": summary.portfolio_id,
+        "total_market_value": summary.total_market_value,
+        "unrealised_pnl": summary.unrealised_pnl,
+        "unrealised_pnl_pct": summary.unrealised_pnl_pct,
+        "positions": summary.positions,
     }
 ```
 
 **`apps/api/Dockerfile`**
 
+Built from the **repo root** so `lib/` is available inside the image.
+
 ```dockerfile
 FROM python:3.11-slim
 WORKDIR /app
-COPY requirements.txt .
+# Copy shared library first (cached layer if lib is unchanged)
+COPY lib/ lib/
+COPY apps/api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY main.py .
+COPY apps/api/ apps/api/
+ENV PYTHONPATH=/app
 EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ---
@@ -1187,6 +1289,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 dash==2.17.0
 plotly==5.22.0
 gunicorn==22.0.0
+pydantic-settings>=2.3.0
 ```
 
 **`apps/ui-dash/app.py`**
@@ -1195,22 +1298,16 @@ gunicorn==22.0.0
 import dash
 from dash import dcc, html
 import plotly.graph_objects as go
-from flask import request, abort
+
+from lib.auth.groups import FlaskGroupAuth
+from lib.config.settings import get_settings
 
 app = dash.Dash(__name__, title="EQ Tech Analytics")
+settings = get_settings()
 
-# Replace with your actual Entra ID Security Group Object ID
-ANALYSTS_GROUP_ID = "REPLACE_WITH_ENTRA_GROUP_OBJECT_ID"
-
-
-@app.server.before_request
-def authorize():
-    """Block unauthenticated or unauthorized requests before any Dash route."""
-    if request.path.startswith("/_dash") or request.path == "/healthz":
-        return
-    groups = [g.strip() for g in request.headers.get("X-Auth-Request-Groups", "").split(",") if g.strip()]
-    if ANALYSTS_GROUP_ID not in groups:
-        abort(403)
+# Enforce AD group membership before every non-exempt request
+auth = FlaskGroupAuth(settings.analysts_group_id, settings.admins_group_id)
+app.server.before_request(auth.before_request)
 
 
 @app.server.route("/healthz")
@@ -1238,12 +1335,16 @@ if __name__ == "__main__":
 
 **`apps/ui-dash/Dockerfile`**
 
+Built from the **repo root** so `lib/` is available inside the image.
+
 ```dockerfile
 FROM python:3.11-slim
 WORKDIR /app
-COPY requirements.txt .
+COPY lib/ lib/
+COPY apps/ui-dash/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py .
+COPY apps/ui-dash/app.py app.py
+ENV PYTHONPATH=/app
 EXPOSE 8050
 CMD ["gunicorn", "app:server", "--bind", "0.0.0.0:8050", "--workers", "2"]
 ```
@@ -1287,7 +1388,8 @@ CMD ["gunicorn", "app:server", "--bind", "0.0.0.0:8050", "--workers", "2"]
 
 ```dockerfile
 FROM nginx:alpine
-COPY index.html /usr/share/nginx/html/index.html
+# Build context is repo root; path must be relative to it
+COPY apps/ui-web/index.html /usr/share/nginx/html/index.html
 EXPOSE 80
 ```
 
@@ -1302,7 +1404,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api
-  namespace: apps
 spec:
   replicas: 1
   selector:
@@ -1336,7 +1437,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: api-service
-  namespace: apps
 spec:
   selector:
     app: api
@@ -1353,7 +1453,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: dash-app
-  namespace: apps
 spec:
   replicas: 1
   selector:
@@ -1387,7 +1486,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: dash-service
-  namespace: apps
 spec:
   selector:
     app: dash-app
@@ -1404,7 +1502,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web-ui
-  namespace: apps
 spec:
   replicas: 1
   selector:
@@ -1432,7 +1529,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: web-service
-  namespace: apps
 spec:
   selector:
     app: web-ui
@@ -1442,25 +1538,24 @@ spec:
   type: ClusterIP
 ```
 
-### `k8s/ingress/ingress.yaml`
+### `k8s/ingress/dev.yaml` / `uat.yaml` / `prod.yaml`
 
-Replace `<LB_IP>` before applying.
+Each file is identical in structure; only the `host` and `auth-signin` URL differ per environment. Replace `<LB_IP>` before applying.
 
 ```yaml
+# k8s/ingress/dev.yaml  (uat.yaml and prod.yaml follow the same pattern)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: eq-tech-ingress
-  namespace: apps
   annotations:
-    # All routes require Entra ID SSO via OAuth2 Proxy
     nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local/oauth2/auth"
-    nginx.ingress.kubernetes.io/auth-signin: "https://eq-tech.<LB_IP>.nip.io/oauth2/start?rd=$escaped_request_uri"
+    nginx.ingress.kubernetes.io/auth-signin: "https://dev.eq-tech.<LB_IP>.nip.io/oauth2/start?rd=$escaped_request_uri"
     nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups"
 spec:
   ingressClassName: nginx
   rules:
-    - host: "eq-tech.<LB_IP>.nip.io"
+    - host: "dev.eq-tech.<LB_IP>.nip.io"
       http:
         paths:
           - path: /api
@@ -1593,6 +1688,7 @@ on:
     branches: [main]
     paths:
       - "infra/helm/airflow-values.yaml"
+      - "infra/helm/airflow-values/**"
       - "data/airflow/docker/**"
   workflow_dispatch:
 
@@ -1601,9 +1697,10 @@ permissions:
   contents: read
 
 jobs:
-  deploy-airflow:
+  deploy-dev:
     name: Helm Upgrade Airflow
     runs-on: ubuntu-latest
+    environment: dev
     steps:
       - uses: actions/checkout@v4
 
@@ -1736,7 +1833,7 @@ jobs:
             --image ${{ matrix.app.image }}:${{ github.sha }} \
             --image ${{ matrix.app.image }}:latest \
             --file ${{ matrix.app.path }}/Dockerfile \
-            ${{ matrix.app.path }}
+            .   # repo root as context so lib/ is available inside the image
 
   deploy-dev:
     name: Deploy – dev
@@ -1761,7 +1858,7 @@ jobs:
         run: |
           kubectl apply -f k8s/namespaces.yaml
           kubectl apply -f k8s/apps/ -n dev-apps
-          kubectl apply -f k8s/ingress/ -n dev-apps
+          kubectl apply -f k8s/ingress/dev.yaml -n dev-apps
           kubectl set image deployment/${{ matrix.app.deployment }} \
             ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
             -n dev-apps --ignore-not-found
@@ -1788,7 +1885,7 @@ jobs:
       - name: Deploy to uat-apps
         run: |
           kubectl apply -f k8s/apps/ -n uat-apps
-          kubectl apply -f k8s/ingress/ -n uat-apps
+          kubectl apply -f k8s/ingress/uat.yaml -n uat-apps
           kubectl set image deployment/${{ matrix.app.deployment }} \
             ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
             -n uat-apps --ignore-not-found
@@ -1815,7 +1912,7 @@ jobs:
       - name: Deploy to prod-apps
         run: |
           kubectl apply -f k8s/apps/ -n prod-apps
-          kubectl apply -f k8s/ingress/ -n prod-apps
+          kubectl apply -f k8s/ingress/prod.yaml -n prod-apps
           kubectl set image deployment/${{ matrix.app.deployment }} \
             ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
             -n prod-apps --ignore-not-found
@@ -2153,6 +2250,194 @@ EOF
 
 ---
 
+## Manual Prerequisites Checklist
+
+Complete every row in this checklist **before pushing to `main`**. These are one-time actions that cannot be automated because they require browser-based portal logins or involve credentials that must never enter the repo.
+
+### Step 1 — Push the repo to GitHub Enterprise
+
+```bash
+cd c:\eq_tech
+git init
+git remote add origin https://github.com/ColumbiaDataScienceCorporation/eq_tech.git
+git add .
+git commit -m "chore: initial platform scaffold"
+# Push after review — do not push until all <LB_IP> placeholders are resolved
+```
+
+### Step 2 — Replace all `<LB_IP>` placeholders
+
+Install NGINX Ingress (Phase 5.3), wait for the external IP, then do a global find-and-replace:
+
+| File | Placeholder | Replace with |
+|---|---|---|
+| `infra/helm/airflow-values.yaml` | `<LB_IP>` | actual IP |
+| `infra/helm/airflow-values/dev.yaml` | `<LB_IP>` | actual IP |
+| `infra/helm/airflow-values/uat.yaml` | `<LB_IP>` | actual IP |
+| `infra/helm/airflow-values/prod.yaml` | `<LB_IP>` | actual IP |
+| `infra/helm/oauth2-proxy-values.yaml` | `<LB_IP>` | actual IP |
+| `infra/helm/oauth2-proxy-values/dev.yaml` | `<LB_IP>` | actual IP |
+| `infra/helm/oauth2-proxy-values/uat.yaml` | `<LB_IP>` | actual IP |
+| `infra/helm/oauth2-proxy-values/prod.yaml` | `<LB_IP>` | actual IP |
+| `k8s/ingress/dev.yaml` | `<LB_IP>` | actual IP |
+| `k8s/ingress/uat.yaml` | `<LB_IP>` | actual IP |
+| `k8s/ingress/prod.yaml` | `<LB_IP>` | actual IP |
+
+```bash
+LB_IP=<your_ip>   # e.g. 20.1.2.3
+# PowerShell one-liner
+Get-ChildItem -Recurse -File c:\eq_tech | `
+  Where-Object { $_.Extension -in '.yaml','.tf' } | `
+  ForEach-Object { (Get-Content $_.FullName) -replace '<LB_IP>',$LB_IP | Set-Content $_.FullName }
+```
+
+### Step 3 — Bootstrap Terraform State Backend
+
+Run once from your local workstation (not in CI):
+
+```bash
+az login
+az account set --subscription 0702e805-0c66-4bbd-9eb4-47ce81ecb369
+az group create --name eq-tech-tfstate-rg --location eastus
+az storage account create --name eqtechtfstate \
+  --resource-group eq-tech-tfstate-rg --location eastus --sku Standard_LRS
+az storage container create --name tfstate --account-name eqtechtfstate
+```
+
+### Step 4 — Create the OIDC Service Principal
+
+Follow Phase 3 exactly. At the end you will have `$APP_ID`. Then:
+
+```bash
+# Add to GitHub → Settings → Secrets → Actions
+AZURE_CLIENT_ID      = <APP_ID output>
+AZURE_TENANT_ID      = e5e33b11-e89c-466a-bf06-e94151676845
+AZURE_SUBSCRIPTION_ID = 0702e805-0c66-4bbd-9eb4-47ce81ecb369
+PG_ADMIN_PASSWORD    = <strong password ≥ 16 chars>
+GIT_SYNC_TOKEN       = <GitHub Fine-Grained PAT, read-only Contents on eq_tech>
+```
+
+### Step 5 — Create Entra ID App Registration for OAuth2 Proxy
+
+Follow Phase 4.1–4.3 (use the placeholder redirect URI). Then:
+
+```bash
+# Add to GitHub → Settings → Secrets → Actions
+OAUTH2_CLIENT_ID     = <OAUTH_APP_ID output>
+OAUTH2_CLIENT_SECRET = <OAUTH_SECRET output>
+```
+
+### Step 6 — Create GitHub Environments with Protection Rules
+
+Navigate to `https://github.com/ColumbiaDataScienceCorporation/eq_tech/settings/environments`:
+
+| Environment | Protection rule |
+|---|---|
+| `dev` | None — auto-deploys on every push to `main` |
+| `uat` | Required reviewer(s): add team lead(s) |
+| `prod` | Required reviewer(s): add ≥ 2 senior engineers; wait timer: 10 min |
+
+All three environments: set **Deployment branches** to `main` only.
+
+### Step 7 — Set Entra ID Group Object IDs
+
+After creating your Entra ID Security Groups, find each group's **Object ID** in:  
+Azure Portal → Entra ID → Groups → `<group name>` → Overview → Object ID
+
+Create a `.env` file on the dev server (never committed):
+```bash
+EQTECH_ANALYSTS_GROUP_ID=<uuid>
+EQTECH_PORTFOLIO_MANAGERS_GROUP_ID=<uuid>
+EQTECH_RISK_GROUP_ID=<uuid>
+EQTECH_ADMINS_GROUP_ID=<uuid>
+```
+
+For AKS pods, add these as Kubernetes ConfigMap or inject via Helm:
+```bash
+kubectl create configmap eq-tech-groups \
+  --namespace dev-apps \
+  --from-literal=EQTECH_ANALYSTS_GROUP_ID=<uuid> \
+  --from-literal=EQTECH_ADMINS_GROUP_ID=<uuid>
+```
+Then reference in the Kubernetes Deployment env section.
+
+### Step 8 — Update Entra ID Redirect URIs
+
+Once `<LB_IP>` is known, run Phase 4.4:
+```bash
+az ad app update \
+  --id $OAUTH_APP_ID \
+  --web-redirect-uris \
+    "https://dev.eq-tech.<LB_IP>.nip.io/oauth2/callback" \
+    "https://uat.eq-tech.<LB_IP>.nip.io/oauth2/callback" \
+    "https://eq-tech.<LB_IP>.nip.io/oauth2/callback"
+```
+
+### Step 9 — Initialize Terraform Workspaces and Create Kubernetes Secrets
+
+```bash
+# Create workspaces (once)
+cd infra/terraform && terraform init
+terraform workspace new dev && terraform workspace new uat && terraform workspace new prod
+
+# Deploy dev infrastructure
+terraform workspace select dev
+terraform apply -var-file environments/dev.tfvars -var "postgres_admin_password=<PASSWORD>"
+
+# Create Kubernetes secrets for dev (repeat for uat and prod when ready)
+PG_FQDN=$(terraform output -raw postgres_fqdn)
+kubectl create secret generic airflow-postgres-secret --namespace dev-airflow \
+  --from-literal=connection="postgresql+psycopg2://airflow_admin:<PASSWORD>@${PG_FQDN}/airflow_dev"
+kubectl create secret generic github-git-sync-token --namespace dev-airflow \
+  --from-literal=GIT_SYNC_USERNAME=x-access-token \
+  --from-literal=GIT_SYNC_PASSWORD=<GIT_SYNC_TOKEN>
+
+COOKIE=$(python3 -c "import secrets,base64;print(base64.b64encode(secrets.token_bytes(16)).decode())")
+kubectl create secret generic oauth2-proxy-secret --namespace auth \
+  --from-literal=client-id=<OAUTH2_CLIENT_ID> \
+  --from-literal=client-secret=<OAUTH2_CLIENT_SECRET> \
+  --from-literal=cookie-secret=$COOKIE
+```
+
+### Step 10 — Deploy OAuth2 Proxy and Airflow Manually (First Time)
+
+```bash
+# OAuth2 Proxy (shared, one-time)
+helm repo add oauth2-proxy https://oauth2-proxy.github.io/manifests && helm repo update
+helm upgrade --install oauth2-proxy oauth2-proxy/oauth2-proxy \
+  --namespace auth \
+  -f infra/helm/oauth2-proxy-values.yaml \
+  -f infra/helm/oauth2-proxy-values/dev.yaml
+
+# Airflow dev (subsequent updates handled by airflow-helm-deploy.yml)
+helm repo add apache-airflow https://airflow.apache.org && helm repo update
+helm upgrade --install airflow-dev apache-airflow/airflow \
+  --namespace dev-airflow \
+  -f infra/helm/airflow-values.yaml \
+  -f infra/helm/airflow-values/dev.yaml \
+  --timeout 10m --atomic
+```
+
+### Step 11 — Change the Default Airflow Admin Password
+
+Log in to the Airflow UI at `https://dev.eq-tech.<LB_IP>.nip.io/airflow/` and immediately change the password from the default `ChangeMe123!` in `airflow-values.yaml`. In production, disable `defaultUser` entirely and use Entra ID via Airflow's `AUTH_BACKEND`.
+
+### Step 12 — Trigger First CI/CD Run
+
+Once all the above is complete, push to `main`:
+```bash
+git add .
+git commit -m "feat: resolve LB_IP placeholders, ready for CI/CD"
+git push origin main
+```
+
+GitHub Actions will:
+1. Build and push Docker images to ACR
+2. Auto-deploy to `dev-*` namespaces
+3. Pause at `uat` and `prod` gates — approve when ready
+
+---
+
 ## Phase 13: End-to-End Deployment Order
 
 **Before starting the numbered sequence, complete these manual steps in order:**
@@ -2200,7 +2485,7 @@ kubectl get svc -n ingress-nginx ingress-nginx-controller
 # Note <LB_IP> from EXTERNAL-IP and update all placeholder values in:
 #   infra/helm/oauth2-proxy-values.yaml
 #   infra/helm/airflow-values.yaml
-#   k8s/ingress/ingress.yaml
+#   k8s/ingress/{dev,uat,prod}.yaml
 #   Entra ID App Registration redirect URI (Phase 4.4)
 
 # ── Step 7: Create Kubernetes secrets ────────────────────────────────────
@@ -2222,7 +2507,8 @@ kubectl create secret generic oauth2-proxy-secret --namespace auth \
 # ── Step 8: Deploy OAuth2 Proxy ───────────────────────────────────────────
 helm repo add oauth2-proxy https://oauth2-proxy.github.io/manifests && helm repo update
 helm upgrade --install oauth2-proxy oauth2-proxy/oauth2-proxy \
-  --namespace auth -f infra/helm/oauth2-proxy-values.yaml
+  --namespace auth -f infra/helm/oauth2-proxy-values.yaml \
+  -f infra/helm/oauth2-proxy-values/dev.yaml
 
 # ── Step 9: Deploy Airflow ────────────────────────────────────────────────
 helm repo add apache-airflow https://airflow.apache.org && helm repo update
@@ -2230,19 +2516,20 @@ helm upgrade --install airflow apache-airflow/airflow \
   --namespace airflow -f infra/helm/airflow-values.yaml --timeout 10m --atomic
 
 # ── Step 10: Build and push application images ───────────────────────────
-az acr build --registry eqtechacr --image api:latest     --file apps/api/Dockerfile     apps/api
-az acr build --registry eqtechacr --image ui-dash:latest --file apps/ui-dash/Dockerfile apps/ui-dash
-az acr build --registry eqtechacr --image ui-web:latest  --file apps/ui-web/Dockerfile  apps/ui-web
+# Build context is the REPO ROOT (.) so lib/ is available inside each image
+az acr build --registry eqtechacr --image api:latest     --file apps/api/Dockerfile     .
+az acr build --registry eqtechacr --image ui-dash:latest --file apps/ui-dash/Dockerfile .
+az acr build --registry eqtechacr --image ui-web:latest  --file apps/ui-web/Dockerfile  .
 
-# ── Step 11: Deploy app manifests and ingress ─────────────────────────────
-kubectl apply -f k8s/apps/
-kubectl apply -f k8s/ingress/
+# ── Step 11: Deploy app manifests and ingress (dev; uat/prod via GitHub Actions) ─
+kubectl apply -f k8s/apps/ -n dev-apps
+kubectl apply -f k8s/ingress/dev.yaml -n dev-apps
 
 # ── Step 12: Verify everything is running ────────────────────────────────
-kubectl get pods -n airflow
-kubectl get pods -n apps
+kubectl get pods -n dev-airflow
+kubectl get pods -n dev-apps
 kubectl get pods -n auth
-kubectl get ingress -n apps
+kubectl get ingress -n dev-apps
 ```
 
 ---
