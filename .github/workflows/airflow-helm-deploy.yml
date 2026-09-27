@@ -37,7 +37,7 @@ jobs:
             -f infra/helm/airflow-values.yaml \
             -f infra/helm/airflow-values/dev.yaml \
             --timeout 10m \
-            --atomic
+            --rollback-on-failure
 
   deploy-uat:
     name: Helm Upgrade Airflow – uat
@@ -62,7 +62,7 @@ jobs:
             -f infra/helm/airflow-values.yaml \
             -f infra/helm/airflow-values/uat.yaml \
             --timeout 10m \
-            --atomic
+            --rollback-on-failure
 
   deploy-prod:
     name: Helm Upgrade Airflow – prod
@@ -87,4 +87,4 @@ jobs:
             -f infra/helm/airflow-values.yaml \
             -f infra/helm/airflow-values/prod.yaml \
             --timeout 10m \
-            --atomic
+            --rollback-on-failure

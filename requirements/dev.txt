@@ -1,5 +1,5 @@
 # Airflow + Kubernetes provider (matches Helm-deployed version)
-apache-airflow==2.9.3
+apache-airflow==2.11.0
 apache-airflow-providers-cncf-kubernetes>=8.0.0
 
 # API

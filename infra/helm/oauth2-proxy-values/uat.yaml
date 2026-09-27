@@ -3,7 +3,5 @@ extraArgs:
   redirect-url: "https://uat.eq-tech.52.185.94.105.nip.io/oauth2/callback"
 ingress:
   hosts:
-    - host: "uat.eq-tech.52.185.94.105.nip.io"
-      paths:
-        - path: /oauth2
-          pathType: Prefix
+    - "uat.eq-tech.52.185.94.105.nip.io"
+  path: /oauth2

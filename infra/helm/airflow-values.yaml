@@ -1,11 +1,11 @@
 # Replace 52.185.94.105 with the NGINX Ingress LoadBalancer external IP before deploying.
 # Deploy with: helm upgrade -f airflow-values.yaml -f airflow-values/<env>.yaml
 
-airflowVersion: "2.9.3"
+airflowVersion: "2.11.0"
 images:
   airflow:
     repository: apache/airflow
-    tag: "2.9.3"
+    tag: "2.11.0"
     pullPolicy: IfNotPresent
 
 executor: "KubernetesExecutor"
@@ -56,7 +56,8 @@ workers:
     create: true
 
 # AIRFLOW_NAMESPACE is read by k8s_pod_operator_dag.py to target the correct namespace
-extraEnv:
+# The Airflow chart requires extraEnv as a YAML block string, not an array
+extraEnv: |
   - name: AIRFLOW_NAMESPACE
     valueFrom:
       fieldRef:

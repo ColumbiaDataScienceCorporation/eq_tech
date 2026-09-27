@@ -18,13 +18,11 @@ extraArgs:
 
 service:
   type: ClusterIP
-  port: 4180
+  portNumber: 4180
 
 ingress:
   enabled: true
   className: nginx
   hosts:
-    - host: "eq-tech.52.185.94.105.nip.io"
-      paths:
-        - path: /oauth2
-          pathType: Prefix
+    - "eq-tech.52.185.94.105.nip.io"
+  path: /oauth2
