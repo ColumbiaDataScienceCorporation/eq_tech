@@ -154,7 +154,7 @@ foreach ($ENV in @("dev", "uat", "prod")) {
     Write-Info "Creating secrets in $NS"
 
     kubectl create secret generic airflow-postgres-secret --namespace $NS `
-        --from-literal=connection="postgresql+psycopg2://airflow_admin:${PG_PASSWORD}@${PG_FQDN}/airflow_${ENV}" `
+        --from-literal=connection="postgresql+psycopg2://airflow_admin:${PG_PASSWORD}@${PG_FQDN}/airflow_${ENV}?sslmode=require" `
         --dry-run=client -o yaml | kubectl apply -f - | Out-Null
 
     kubectl create secret generic github-git-sync-token --namespace $NS `
