@@ -18,6 +18,8 @@ config:
     base_url: "https://dev.eq-tech.52.185.94.105.nip.io/airflow"
 ingress:
   web:
+    annotations:
+      nginx.ingress.kubernetes.io/auth-signin: "http://dev.eq-tech.52.185.94.105.nip.io/oauth2/start?rd=$escaped_request_uri"
     hosts:
       - name: "dev.eq-tech.52.185.94.105.nip.io"
     path: "/airflow"
