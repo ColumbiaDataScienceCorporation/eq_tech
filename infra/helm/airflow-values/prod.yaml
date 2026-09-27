@@ -9,9 +9,9 @@ webserver:
     limits:   { cpu: "1",     memory: "1Gi"   }
 config:
   webserver:
-    base_url: "https://eq-tech.<LB_IP>.nip.io/airflow"
+    base_url: "https://eq-tech.52.185.94.105.nip.io/airflow"
 ingress:
   web:
     hosts:
-      - name: "eq-tech.<LB_IP>.nip.io"
+      - name: "eq-tech.52.185.94.105.nip.io"
     path: "/airflow"

@@ -1,9 +1,9 @@
 # Dev environment OAuth2 Proxy overrides
 extraArgs:
-  redirect-url: "https://dev.eq-tech.<LB_IP>.nip.io/oauth2/callback"
+  redirect-url: "https://dev.eq-tech.52.185.94.105.nip.io/oauth2/callback"
 ingress:
   hosts:
-    - host: "dev.eq-tech.<LB_IP>.nip.io"
+    - host: "dev.eq-tech.52.185.94.105.nip.io"
       paths:
         - path: /oauth2
           pathType: Prefix

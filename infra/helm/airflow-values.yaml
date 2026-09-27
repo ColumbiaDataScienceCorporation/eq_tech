@@ -1,4 +1,4 @@
-# Replace <LB_IP> with the NGINX Ingress LoadBalancer external IP before deploying.
+# Replace 52.185.94.105 with the NGINX Ingress LoadBalancer external IP before deploying.
 # Deploy with: helm upgrade -f airflow-values.yaml -f airflow-values/<env>.yaml
 
 airflowVersion: "2.9.3"
@@ -65,7 +65,7 @@ extraEnv:
 # base_url is overridden per environment in airflow-values/<env>.yaml
 config:
   webserver:
-    base_url: "https://eq-tech.<LB_IP>.nip.io/airflow"
+    base_url: "https://eq-tech.52.185.94.105.nip.io/airflow"
 
 # Ingress protected by OAuth2 Proxy (auth-url annotation triggers the external-auth flow)
 ingress:
@@ -74,10 +74,10 @@ ingress:
     ingressClassName: nginx
     annotations:
       nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local/oauth2/auth"
-      nginx.ingress.kubernetes.io/auth-signin: "https://eq-tech.<LB_IP>.nip.io/oauth2/start?rd=$escaped_request_uri"
+      nginx.ingress.kubernetes.io/auth-signin: "https://eq-tech.52.185.94.105.nip.io/oauth2/start?rd=$escaped_request_uri"
       nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups"
     hosts:
-      - name: "eq-tech.<LB_IP>.nip.io"
+      - name: "eq-tech.52.185.94.105.nip.io"
         tls:
           enabled: false
     path: "/airflow"

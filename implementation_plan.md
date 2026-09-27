@@ -2,13 +2,13 @@
 
 ## Account Context
 
-| Resource | Value |
-|---|---|
-| Azure Subscription ID | `0702e805-0c66-4bbd-9eb4-47ce81ecb369` |
-| Azure Tenant ID | `e5e33b11-e89c-466a-bf06-e94151676845` |
-| Azure Tenant Domain | `jinxin1hotmail.onmicrosoft.com` |
+| Resource               | Value                                                         |
+| ---------------------- | ------------------------------------------------------------- |
+| Azure Subscription ID  | `0702e805-0c66-4bbd-9eb4-47ce81ecb369`                      |
+| Azure Tenant ID        | `e5e33b11-e89c-466a-bf06-e94151676845`                      |
+| Azure Tenant Domain    | `jinxin1hotmail.onmicrosoft.com`                            |
 | GitHub Enterprise Repo | `https://github.com/ColumbiaDataScienceCorporation/eq_tech` |
-| GitHub Org | `ColumbiaDataScienceCorporation` |
+| GitHub Org             | `ColumbiaDataScienceCorporation`                            |
 
 ---
 
@@ -45,6 +45,7 @@
 ```
 
 **Authentication flow for every request:**
+
 ```
 Browser → NGINX Ingress → OAuth2 Proxy → Entra ID (OIDC login)
                                 ↓ (200 OK + X-Auth-Request-Groups header)
@@ -143,6 +144,9 @@ eq_tech/
 │   ├── dev.txt                         # Installed on the central dev server shared venv
 │   ├── api.txt                         # Mirror of apps/api/requirements.txt
 │   └── dash.txt                        # Mirror of apps/ui-dash/requirements.txt
+├── scripts/
+│   ├── bootstrap.ps1                   # Automates Steps 2–4: Terraform backend, OIDC SP, Entra ID app reg
+│   └── provision-dev.ps1               # Automates Step 7: Terraform apply, NGINX Ingress, namespaces, LB IP
 ├── pyproject.toml                      # Project metadata + tool config (ruff, pytest)
 └── .gitignore
 ```
@@ -484,6 +488,7 @@ output "keyvault_uri" {
 `environments/` files contain non-sensitive configuration and **are committed to the repo**. The PostgreSQL password is always passed via `-var` in CI and never stored in these files.
 
 **`infra/terraform/environments/dev.tfvars`**
+
 ```hcl
 # Trial-grade: minimal resources to stay within the $200 free credit
 environment         = "dev"
@@ -494,6 +499,7 @@ postgres_storage_mb = 32768
 ```
 
 **`infra/terraform/environments/uat.tfvars`**
+
 ```hcl
 environment         = "uat"
 aks_node_count      = 2
@@ -503,6 +509,7 @@ postgres_storage_mb = 65536
 ```
 
 **`infra/terraform/environments/prod.tfvars`**
+
 ```hcl
 environment         = "prod"
 aks_node_count      = 3
@@ -577,15 +584,15 @@ echo "AZURE_CLIENT_ID = $APP_ID"
 
 Navigate to `https://github.com/ColumbiaDataScienceCorporation/eq_tech/settings/secrets/actions` and add:
 
-| Secret Name | Value |
-|---|---|
-| `AZURE_CLIENT_ID` | Output of `$APP_ID` above |
-| `AZURE_TENANT_ID` | `e5e33b11-e89c-466a-bf06-e94151676845` |
-| `AZURE_SUBSCRIPTION_ID` | `0702e805-0c66-4bbd-9eb4-47ce81ecb369` |
-| `PG_ADMIN_PASSWORD` | Strong password for PostgreSQL (16+ chars) |
-| `GIT_SYNC_TOKEN` | GitHub Fine-Grained PAT with read-only `Contents` on `eq_tech` |
-| `OAUTH2_CLIENT_ID` | Entra ID App Client ID (set up in Phase 4) |
-| `OAUTH2_CLIENT_SECRET` | Entra ID App Client Secret (set up in Phase 4) |
+| Secret Name               | Value                                                             |
+| ------------------------- | ----------------------------------------------------------------- |
+| `AZURE_CLIENT_ID`       | Output of`$APP_ID` above                                        |
+| `AZURE_TENANT_ID`       | `e5e33b11-e89c-466a-bf06-e94151676845`                          |
+| `AZURE_SUBSCRIPTION_ID` | `0702e805-0c66-4bbd-9eb4-47ce81ecb369`                          |
+| `PG_ADMIN_PASSWORD`     | Strong password for PostgreSQL (16+ chars)                        |
+| `GIT_SYNC_TOKEN`        | GitHub Fine-Grained PAT with read-only`Contents` on `eq_tech` |
+| `OAUTH2_CLIENT_ID`      | Entra ID App Client ID (set up in Phase 4)                        |
+| `OAUTH2_CLIENT_SECRET`  | Entra ID App Client Secret (set up in Phase 4)                    |
 
 ---
 
@@ -621,6 +628,7 @@ az ad app update --id $OAUTH_APP_ID --set groupMembershipClaims=SecurityGroup
 ```
 
 Or in the Azure Portal:
+
 1. **Entra ID → App Registrations → eq-tech-oauth2-proxy**
 2. **Token configuration → Add groups claim → Security groups → Save**
 
@@ -729,7 +737,7 @@ helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
 kubectl get svc -n ingress-nginx ingress-nginx-controller --watch
 ```
 
-Note the `EXTERNAL-IP` value (e.g. `20.1.2.3`). Your platform domain becomes:  
+Note the `EXTERNAL-IP` value (e.g. `20.1.2.3`). Your platform domain becomes:
 `https://eq-tech.20.1.2.3.nip.io`
 
 Replace every occurrence of `<LB_IP>` in this document with that IP address.
@@ -915,6 +923,7 @@ helm upgrade --install airflow apache-airflow/airflow \
 Each `infra/helm/airflow-values/<env>.yaml` is passed as a **second `-f` flag** to `helm upgrade`, layering environment-specific settings on top of `airflow-values.yaml`. Only keys that differ from the base need to be listed.
 
 **`infra/helm/airflow-values/dev.yaml`** – minimal resources for the trial
+
 ```yaml
 scheduler:
   resources:
@@ -935,6 +944,7 @@ ingress:
 ```
 
 **`infra/helm/airflow-values/uat.yaml`** – production-like sizing
+
 ```yaml
 scheduler:
   resources:
@@ -955,6 +965,7 @@ ingress:
 ```
 
 **`infra/helm/airflow-values/prod.yaml`** – full resources
+
 ```yaml
 scheduler:
   resources:
@@ -975,6 +986,7 @@ ingress:
 ```
 
 **`infra/helm/oauth2-proxy-values/dev.yaml`** – dev callback
+
 ```yaml
 extraArgs:
   redirect-url: "https://dev.eq-tech.<LB_IP>.nip.io/oauth2/callback"
@@ -2042,6 +2054,7 @@ python -c "import airflow; print(airflow.__version__)"  # 2.9.3
 Linux disk quotas set a **soft limit** (warning) and **hard limit** (enforced) per developer home directory. A cron script runs every 15 minutes, reads per-user usage from `repquota`, and automatically raises individual limits when a developer approaches their cap. When the OS disk itself runs low, the same script expands the Azure managed disk online using the VM's managed identity — no manual intervention required.
 
 **Scale-up chain:**
+
 ```
 Every 15 minutes:
   1. Check overall disk used%
@@ -2248,13 +2261,70 @@ ssh devadmin@$DEVBOX_IP sudo tee /etc/cron.d/eq-tech-venv-sync << 'EOF'
 EOF
 ```
 
+### 12.9 Create the `.env` File (Step 6c)
+
+Now that the dev server exists and Step 7 has provisioned PostgreSQL, create the `.env` file in your working copy on the server. Do **not** commit it — it is already in `.gitignore`.
+
+```bash
+DEVBOX_IP=<DEVBOX_PUBLIC_IP>
+PG_FQDN=$(terraform -chdir=c:\eq_tech\infra\terraform output -raw postgres_fqdn)
+
+ssh devadmin@$DEVBOX_IP bash -s << EOF
+cat > ~/eq_tech/.env << ENVFILE
+EQTECH_ENVIRONMENT=dev
+
+# Entra ID group Object IDs (from Step 6b)
+EQTECH_ANALYSTS_GROUP_ID=e5027eb5-1610-4b88-b68e-8b59af3e3052
+EQTECH_PORTFOLIO_MANAGERS_GROUP_ID=c6a15f1b-fe3e-4419-b43e-a740a9366b1f
+EQTECH_RISK_GROUP_ID=e9d1a418-656c-4721-96e7-be308c809e44
+EQTECH_ADMINS_GROUP_ID=4d39f097-51ec-46c5-a2ac-9f49b86eb28d
+
+# PostgreSQL
+EQTECH_POSTGRES_HOST=$PG_FQDN
+EQTECH_POSTGRES_USER=airflow_admin
+EQTECH_POSTGRES_PASSWORD=<pg_admin_password>
+ENVFILE
+EOF
+```
+
+`lib/config/settings.py` picks this file up automatically via `pydantic-settings` when running code on the dev server.
+
 ---
 
 ## Manual Prerequisites Checklist
 
-Complete every row in this checklist **before pushing to `main`**. These are one-time actions that cannot be automated because they require browser-based portal logins or involve credentials that must never enter the repo.
+Execute these steps **in order**. Each step unlocks the next.
 
-### Step 1 — Push the repo to GitHub Enterprise
+> **Steps 2, 3, and 4 are automated.** Run `scripts/bootstrap.ps1` from the repo root to complete them in one shot:
+>
+> ```powershell
+> cd c:\eq_tech
+> .\scripts\bootstrap.ps1
+> ```
+>
+> The script is idempotent — safe to re-run. It prints all GitHub Secrets values at the end.
+
+```
+Step 1  Push scaffold to GitHub (placeholders still in files)
+Step 2  Bootstrap Terraform state backend                        ← scripts/bootstrap.ps1
+Step 3  Create OIDC service principal → add GitHub Secrets       ← scripts/bootstrap.ps1
+Step 4  Create Entra ID App Registration → add GitHub Secrets    ← scripts/bootstrap.ps1
+Step 5  Create GitHub Environments (dev / uat / prod)
+Step 6  Set Entra ID Group Object IDs
+Step 7  Terraform apply (dev) -> install NGINX Ingress -> get LB_IP    <- scripts/provision-dev.ps1
+        + 7e: create eq-tech-groups ConfigMap in all app namespaces      <- scripts/provision-dev.ps1
+Step 8  Replace <LB_IP> everywhere → commit → push           ← runs CI/CD for first time
+Step 9  Update Entra ID redirect URIs with real URLs
+Step 10 Create Kubernetes secrets (per environment)
+Step 11 Deploy OAuth2 Proxy and Airflow (first time, manually)
+Step 12 Change default Airflow admin password
+```
+
+---
+
+### Step 1 — Push the scaffold to GitHub Enterprise `[no Phase — git only]`
+
+The initial push goes up **with `<LB_IP>` placeholders still in the files**. You will replace them in Step 8 once the IP exists.
 
 ```bash
 cd c:\eq_tech
@@ -2262,108 +2332,281 @@ git init
 git remote add origin https://github.com/ColumbiaDataScienceCorporation/eq_tech.git
 git add .
 git commit -m "chore: initial platform scaffold"
-# Push after review — do not push until all <LB_IP> placeholders are resolved
+git push -u origin main
 ```
 
-### Step 2 — Replace all `<LB_IP>` placeholders
+---
 
-Install NGINX Ingress (Phase 5.3), wait for the external IP, then do a global find-and-replace:
+### Step 2 — Bootstrap Terraform State Backend `[Phase 2]` *(automated in `scripts/bootstrap.ps1`)*
 
-| File | Placeholder | Replace with |
-|---|---|---|
-| `infra/helm/airflow-values.yaml` | `<LB_IP>` | actual IP |
-| `infra/helm/airflow-values/dev.yaml` | `<LB_IP>` | actual IP |
-| `infra/helm/airflow-values/uat.yaml` | `<LB_IP>` | actual IP |
-| `infra/helm/airflow-values/prod.yaml` | `<LB_IP>` | actual IP |
-| `infra/helm/oauth2-proxy-values.yaml` | `<LB_IP>` | actual IP |
-| `infra/helm/oauth2-proxy-values/dev.yaml` | `<LB_IP>` | actual IP |
-| `infra/helm/oauth2-proxy-values/uat.yaml` | `<LB_IP>` | actual IP |
-| `infra/helm/oauth2-proxy-values/prod.yaml` | `<LB_IP>` | actual IP |
-| `k8s/ingress/dev.yaml` | `<LB_IP>` | actual IP |
-| `k8s/ingress/uat.yaml` | `<LB_IP>` | actual IP |
-| `k8s/ingress/prod.yaml` | `<LB_IP>` | actual IP |
-
-```bash
-LB_IP=<your_ip>   # e.g. 20.1.2.3
-# PowerShell one-liner
-Get-ChildItem -Recurse -File c:\eq_tech | `
-  Where-Object { $_.Extension -in '.yaml','.tf' } | `
-  ForEach-Object { (Get-Content $_.FullName) -replace '<LB_IP>',$LB_IP | Set-Content $_.FullName }
-```
-
-### Step 3 — Bootstrap Terraform State Backend
-
-Run once from your local workstation (not in CI):
+> **Run `scripts/bootstrap.ps1` instead.** The manual commands below are for reference only.
 
 ```bash
 az login
 az account set --subscription 0702e805-0c66-4bbd-9eb4-47ce81ecb369
+
 az group create --name eq-tech-tfstate-rg --location eastus
+
 az storage account create --name eqtechtfstate \
   --resource-group eq-tech-tfstate-rg --location eastus --sku Standard_LRS
+
 az storage container create --name tfstate --account-name eqtechtfstate
 ```
 
-### Step 4 — Create the OIDC Service Principal
+---
 
-Follow Phase 3 exactly. At the end you will have `$APP_ID`. Then:
+### Step 3 — Create the OIDC Service Principal `[Phase 3]` *(automated in `scripts/bootstrap.ps1`)*
+
+> **Run `scripts/bootstrap.ps1` first.** It creates the app registration, service principal, role assignment, and OIDC federated credentials automatically.
+>
+> After the script finishes, do the following three manual actions:
+
+#### 3a — Create the `GIT_SYNC_TOKEN` Fine-Grained PAT
+
+Navigate to `https://github.com/settings/tokens?type=beta` and create a new token:
+
+| Field             | Value                                          |
+| ----------------- | ---------------------------------------------- |
+| Token name        | `eq-tech-git-sync`                           |
+| Expiration        | 1 year                                         |
+| Repository access | Only`ColumbiaDataScienceCorporation/eq_tech` |
+| Permission        | **Contents → Read-only**                |
+
+Copy the token value — it is shown only once.
+
+#### 3b — Add GitHub Actions Secrets
+
+Navigate to `https://github.com/ColumbiaDataScienceCorporation/eq_tech/settings/secrets/actions` and add all seven secrets:
+
+| Secret name               | Where to get the value                                                    |
+| ------------------------- | ------------------------------------------------------------------------- |
+| `AZURE_CLIENT_ID`       | Printed by`bootstrap.ps1`                                               |
+| `AZURE_TENANT_ID`       | `e5e33b11-e89c-466a-bf06-e94151676845` (fixed)                          |
+| `AZURE_SUBSCRIPTION_ID` | `0702e805-0c66-4bbd-9eb4-47ce81ecb369` (fixed)                          |
+| `OAUTH2_CLIENT_ID`      | Printed by`bootstrap.ps1`                                               |
+| `OAUTH2_CLIENT_SECRET`  | Printed by`bootstrap.ps1` (shown once — save immediately)              |
+| `PG_ADMIN_PASSWORD`     | Choose a strong password ≥16 chars — you will use this again in Step 10 |
+| `GIT_SYNC_TOKEN`        | The Fine-Grained PAT created in step 3a above                             |
+
+---
+
+### Step 4 — Create Entra ID App Registration for OAuth2 Proxy `[Phase 4]` *(automated in `scripts/bootstrap.ps1`)*
+
+> The app registration, groups claim, Graph permissions, admin consent, and client secret are all created by `scripts/bootstrap.ps1`.
+> The secret value is printed at the end of the script run — add it to GitHub Secrets as `OAUTH2_CLIENT_SECRET` (covered in Step 3b above).
+
+---
+
+### Step 5 — Create GitHub Environments with Protection Rules `[no Phase — GitHub UI only]`
+
+Navigate to `https://github.com/ColumbiaDataScienceCorporation/eq_tech/settings/environments` and create three environments:
+
+| Environment | Required reviewers          | Wait timer | Deployment branches |
+| ----------- | --------------------------- | ---------- | ------------------- |
+| `dev`     | None                        | None       | `main` only       |
+| `uat`     | Add yourself (or team lead) | None       | `main` only       |
+| `prod`    | Add ≥2 reviewers           | 10 minutes | `main` only       |
+
+For each environment, under **Deployment branches**, choose **Selected branches** and add the pattern `main`.
+
+---
+
+### Step 6 — Set Entra ID Group Object IDs `[no Phase — Azure Portal + Phase 12.9 for .env]`
+
+> **When to do this:** You can create the groups and note their Object IDs right now (before infrastructure exists). The `.env` file and `kubectl create configmap` commands at the end of this step must wait until after Step 7 (AKS cluster exists).
+
+#### 6a — Create the Security Groups in Entra ID
+
+Navigate to **Azure Portal → Entra ID → Groups → + New group** and fill in the form once for each group below:
+
+| Field                                    | Value                                         |
+| ---------------------------------------- | --------------------------------------------- |
+| **Group type**                     | Security                                      |
+| **Group name**                     | e.g.`eq-tech-analysts`                      |
+| **Group description**              | e.g.`EQ Tech platform – analytics viewers` |
+| **Azure AD roles can be assigned** | No                                            |
+| **Membership type**                | Assigned                                      |
+| **Owners**                         | Add yourself                                  |
+| **Members**                        | Add team members who should have this role    |
+
+Repeat for each of the four groups:
+
+| Group name (suggestion)        | Used for                                                      |
+| ------------------------------ | ------------------------------------------------------------- |
+| `eq-tech-analysts`           | Read-only analytics access (Dash app, API portfolio endpoint) |
+| `eq-tech-portfolio-managers` | Portfolio management access                                   |
+| `eq-tech-risk`               | Risk dashboard access                                         |
+| `eq-tech-admins`             | Full platform admin access (includes Airflow UI)              |
+
+> **Note:** Group names are arbitrary — use whatever naming convention your organisation prefers. The code only checks the Object ID (a UUID), not the name.
+
+#### 6b — Find each group's Object ID
+
+After creating each group:
+
+1. Go to **Azure Portal → Entra ID → Groups**
+2. Click the group name
+3. On the **Overview** page, copy the **Object ID** field (format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
+
+Keep these four UUIDs — you'll need them in Steps 12.9 and 7e.
+
+> **When:** 6a and 6b can be done now (no infrastructure needed). The `.env` file on the dev server is Step 12.9 — after the VM exists.
+
+---
+
+### Step 7 — Provision Infrastructure and Get the LoadBalancer IP `[Phase 2 + Phase 5]` *(automated in `scripts/provision-dev.ps1`)*
+
+> **Run `scripts/provision-dev.ps1` instead of the manual commands below.** It handles sub-steps 7a–7e. Pass your group Object IDs as parameters so 7e runs automatically:
+> ```powershell
+> .\scripts\provision-dev.ps1 `
+>     -AnalystsGroupId          e5027eb5-1610-4b88-b68e-8b59af3e3052 `
+>     -PortfolioManagersGroupId c6a15f1b-fe3e-4419-b43e-a740a9366b1f `
+>     -RiskGroupId              e9d1a418-656c-4721-96e7-be308c809e44 `
+>     -AdminsGroupId            4d39f097-51ec-46c5-a2ac-9f49b86eb28d
+> ```
+> If group IDs are omitted, the script prompts for them interactively.
+>
+> ```powershell
+> .\scripts\provision-dev.ps1
+> ```
+
+This step creates the AKS cluster, installs NGINX Ingress, and captures the public IP that all subsequent steps depend on.
+
+#### 7a — Terraform apply (dev workspace)
 
 ```bash
-# Add to GitHub → Settings → Secrets → Actions
-AZURE_CLIENT_ID      = <APP_ID output>
-AZURE_TENANT_ID      = e5e33b11-e89c-466a-bf06-e94151676845
-AZURE_SUBSCRIPTION_ID = 0702e805-0c66-4bbd-9eb4-47ce81ecb369
-PG_ADMIN_PASSWORD    = <strong password ≥ 16 chars>
-GIT_SYNC_TOKEN       = <GitHub Fine-Grained PAT, read-only Contents on eq_tech>
+cd infra/terraform
+terraform init
+
+terraform workspace new dev
+terraform workspace new uat
+terraform workspace new prod
+
+terraform workspace select dev
+terraform apply \
+  -var-file environments/dev.tfvars \
+  -var "postgres_admin_password=<PG_ADMIN_PASSWORD>"
 ```
 
-### Step 5 — Create Entra ID App Registration for OAuth2 Proxy
-
-Follow Phase 4.1–4.3 (use the placeholder redirect URI). Then:
+#### 7b — Get AKS credentials and install NGINX Ingress
 
 ```bash
-# Add to GitHub → Settings → Secrets → Actions
-OAUTH2_CLIENT_ID     = <OAUTH_APP_ID output>
-OAUTH2_CLIENT_SECRET = <OAUTH_SECRET output>
+az aks get-credentials --resource-group eq-tech-rg --name eq-tech-aks
+
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx && helm repo update
+helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx --create-namespace \
+  --set controller.replicaCount=1
 ```
 
-### Step 6 — Create GitHub Environments with Protection Rules
+#### 7c — Wait for the LoadBalancer IP (takes 1–3 minutes)
 
-Navigate to `https://github.com/ColumbiaDataScienceCorporation/eq_tech/settings/environments`:
-
-| Environment | Protection rule |
-|---|---|
-| `dev` | None — auto-deploys on every push to `main` |
-| `uat` | Required reviewer(s): add team lead(s) |
-| `prod` | Required reviewer(s): add ≥ 2 senior engineers; wait timer: 10 min |
-
-All three environments: set **Deployment branches** to `main` only.
-
-### Step 7 — Set Entra ID Group Object IDs
-
-After creating your Entra ID Security Groups, find each group's **Object ID** in:  
-Azure Portal → Entra ID → Groups → `<group name>` → Overview → Object ID
-
-Create a `.env` file on the dev server (never committed):
 ```bash
-EQTECH_ANALYSTS_GROUP_ID=<uuid>
-EQTECH_PORTFOLIO_MANAGERS_GROUP_ID=<uuid>
-EQTECH_RISK_GROUP_ID=<uuid>
-EQTECH_ADMINS_GROUP_ID=<uuid>
+# Watch until EXTERNAL-IP is no longer <pending>
+kubectl get svc -n ingress-nginx ingress-nginx-controller --watch
+
+# Capture the IP
+kubectl get svc -n ingress-nginx ingress-nginx-controller \
+  --output jsonpath='{.status.loadBalancer.ingress[0].ip}'
 ```
 
-For AKS pods, add these as Kubernetes ConfigMap or inject via Helm:
+Example output: `20.1.2.3` — note this value, you will use it in Step 8.
+
+#### 7d — Create Kubernetes namespaces
+
 ```bash
-kubectl create configmap eq-tech-groups \
-  --namespace dev-apps \
-  --from-literal=EQTECH_ANALYSTS_GROUP_ID=<uuid> \
-  --from-literal=EQTECH_ADMINS_GROUP_ID=<uuid>
+kubectl apply -f k8s/namespaces.yaml
 ```
-Then reference in the Kubernetes Deployment env section.
 
-### Step 8 — Update Entra ID Redirect URIs
+#### 7e — Create Kubernetes ConfigMap for Entra ID Group IDs
 
-Once `<LB_IP>` is known, run Phase 4.4:
+The API and Dash pods read group IDs from the `eq-tech-groups` ConfigMap (already referenced via `envFrom` in `k8s/apps/api-deployment.yaml` and `k8s/apps/dash-deployment.yaml`). Substitute your actual Object IDs from Step 6b:
+
+```bash
+for NS in dev-apps uat-apps prod-apps; do
+  kubectl create configmap eq-tech-groups --namespace $NS \
+    --from-literal=EQTECH_ANALYSTS_GROUP_ID=<uuid> \
+    --from-literal=EQTECH_PORTFOLIO_MANAGERS_GROUP_ID=<uuid> \
+    --from-literal=EQTECH_RISK_GROUP_ID=<uuid> \
+    --from-literal=EQTECH_ADMINS_GROUP_ID=<uuid>
+done
+
+# Verify
+kubectl get configmap eq-tech-groups -n dev-apps -o yaml
+```
+
+---
+
+### Step 8 — Replace `<LB_IP>` Everywhere and Push `[Phase 6, 7, 7b, k8s/ingress]`
+
+#### What is `<LB_IP>` and why is it needed?
+
+Every ingress hostname, OAuth2 redirect URI, and Airflow base URL is built around the **NGINX Ingress LoadBalancer IP**. The plan uses `nip.io`, a free public DNS service: any subdomain of an IP address automatically resolves back to that IP with no DNS registration needed.
+
+| Subdomain                       | Resolves to  | Environment |
+| ------------------------------- | ------------ | ----------- |
+| `dev.eq-tech.20.1.2.3.nip.io` | `20.1.2.3` | Dev         |
+| `uat.eq-tech.20.1.2.3.nip.io` | `20.1.2.3` | UAT         |
+| `eq-tech.20.1.2.3.nip.io`     | `20.1.2.3` | Prod        |
+
+All three subdomains hit the same NGINX controller; it routes each request to the right namespace via the Ingress `host:` rule.
+
+#### Replace in your local clone
+
+```powershell
+cd c:\eq_tech
+git pull
+
+$LB_IP = "20.1.2.3"   # ← your actual IP from Step 7c
+
+Get-ChildItem -Recurse -File . |
+  Where-Object { $_.Extension -in '.yaml', '.yml', '.tf', '.tfvars' } |
+  ForEach-Object {
+    $content = Get-Content $_.FullName -Raw
+    if ($content -match '<LB_IP>') {
+      ($content -replace '<LB_IP>', $LB_IP) | Set-Content $_.FullName -NoNewline
+      Write-Host "Updated: $($_.FullName)"
+    }
+  }
+
+# Verify – should return no output if all replaced
+Select-String -Recurse -Path . -Pattern '<LB_IP>' -Include '*.yaml','*.yml','*.tf'
+```
+
+The following 11 files will be updated:
+
+| File                                         | What it controls                         |
+| -------------------------------------------- | ---------------------------------------- |
+| `infra/helm/airflow-values.yaml`           | Base Airflow`base_url`                 |
+| `infra/helm/airflow-values/dev.yaml`       | Dev Airflow URL + ingress host           |
+| `infra/helm/airflow-values/uat.yaml`       | UAT Airflow URL + ingress host           |
+| `infra/helm/airflow-values/prod.yaml`      | Prod Airflow URL + ingress host          |
+| `infra/helm/oauth2-proxy-values.yaml`      | Base OAuth2 redirect URL                 |
+| `infra/helm/oauth2-proxy-values/dev.yaml`  | Dev OAuth2 callback + ingress host       |
+| `infra/helm/oauth2-proxy-values/uat.yaml`  | UAT OAuth2 callback + ingress host       |
+| `infra/helm/oauth2-proxy-values/prod.yaml` | Prod OAuth2 callback + ingress host      |
+| `k8s/ingress/dev.yaml`                     | Dev HTTP routing + auth-signin redirect  |
+| `k8s/ingress/uat.yaml`                     | UAT HTTP routing + auth-signin redirect  |
+| `k8s/ingress/prod.yaml`                    | Prod HTTP routing + auth-signin redirect |
+
+#### Commit and push — this triggers CI/CD for the first time
+
+```powershell
+git add infra/helm/ k8s/ingress/
+git commit -m "chore: resolve LB_IP placeholders (<your_ip>)"
+git push origin main
+```
+
+GitHub Actions will run `apps-ci.yml` automatically. The `dev` jobs build images and deploy app pods to `dev-apps`. They will succeed. OAuth2 Proxy and Airflow are not yet deployed so the UI won't authenticate yet — that happens in Step 11.
+
+> **For production with a real domain:** replace all `nip.io` URLs with your actual domain (e.g., `dev.yourdomain.com`, `yourdomain.com`), create Azure DNS A records pointing to the LB IP, and use those domains in the Entra ID registration too.
+
+---
+
+### Step 9 — Update Entra ID Redirect URIs `[Phase 4.4]`
+
+Now that the real URLs are known, update the Entra ID App Registration (Phase 4.4):
+
 ```bash
 az ad app update \
   --id $OAUTH_APP_ID \
@@ -2373,24 +2616,20 @@ az ad app update \
     "https://eq-tech.<LB_IP>.nip.io/oauth2/callback"
 ```
 
-### Step 9 — Initialize Terraform Workspaces and Create Kubernetes Secrets
+---
+
+### Step 10 — Create Kubernetes Secrets `[Phase 5.4]`
 
 ```bash
-# Create workspaces (once)
-cd infra/terraform && terraform init
-terraform workspace new dev && terraform workspace new uat && terraform workspace new prod
+PG_FQDN=$(terraform -chdir=infra/terraform output -raw postgres_fqdn)
 
-# Deploy dev infrastructure
-terraform workspace select dev
-terraform apply -var-file environments/dev.tfvars -var "postgres_admin_password=<PASSWORD>"
-
-# Create Kubernetes secrets for dev (repeat for uat and prod when ready)
-PG_FQDN=$(terraform output -raw postgres_fqdn)
-kubectl create secret generic airflow-postgres-secret --namespace dev-airflow \
-  --from-literal=connection="postgresql+psycopg2://airflow_admin:<PASSWORD>@${PG_FQDN}/airflow_dev"
-kubectl create secret generic github-git-sync-token --namespace dev-airflow \
-  --from-literal=GIT_SYNC_USERNAME=x-access-token \
-  --from-literal=GIT_SYNC_PASSWORD=<GIT_SYNC_TOKEN>
+for ENV in dev uat prod; do
+  kubectl create secret generic airflow-postgres-secret --namespace ${ENV}-airflow \
+    --from-literal=connection="postgresql+psycopg2://airflow_admin:<PG_PASSWORD>@${PG_FQDN}/airflow_${ENV}"
+  kubectl create secret generic github-git-sync-token --namespace ${ENV}-airflow \
+    --from-literal=GIT_SYNC_USERNAME=x-access-token \
+    --from-literal=GIT_SYNC_PASSWORD=<GIT_SYNC_TOKEN>
+done
 
 COOKIE=$(python3 -c "import secrets,base64;print(base64.b64encode(secrets.token_bytes(16)).decode())")
 kubectl create secret generic oauth2-proxy-secret --namespace auth \
@@ -2399,17 +2638,19 @@ kubectl create secret generic oauth2-proxy-secret --namespace auth \
   --from-literal=cookie-secret=$COOKIE
 ```
 
-### Step 10 — Deploy OAuth2 Proxy and Airflow Manually (First Time)
+---
+
+### Step 11 — Deploy OAuth2 Proxy and Airflow (First Time) `[Phase 6 + Phase 7]`
+
+Subsequent updates are handled by `airflow-helm-deploy.yml`. This is only needed once to bootstrap.
 
 ```bash
-# OAuth2 Proxy (shared, one-time)
 helm repo add oauth2-proxy https://oauth2-proxy.github.io/manifests && helm repo update
 helm upgrade --install oauth2-proxy oauth2-proxy/oauth2-proxy \
   --namespace auth \
   -f infra/helm/oauth2-proxy-values.yaml \
   -f infra/helm/oauth2-proxy-values/dev.yaml
 
-# Airflow dev (subsequent updates handled by airflow-helm-deploy.yml)
 helm repo add apache-airflow https://airflow.apache.org && helm repo update
 helm upgrade --install airflow-dev apache-airflow/airflow \
   --namespace dev-airflow \
@@ -2418,23 +2659,11 @@ helm upgrade --install airflow-dev apache-airflow/airflow \
   --timeout 10m --atomic
 ```
 
-### Step 11 — Change the Default Airflow Admin Password
+---
 
-Log in to the Airflow UI at `https://dev.eq-tech.<LB_IP>.nip.io/airflow/` and immediately change the password from the default `ChangeMe123!` in `airflow-values.yaml`. In production, disable `defaultUser` entirely and use Entra ID via Airflow's `AUTH_BACKEND`.
+### Step 12 — Change the Default Airflow Admin Password `[Phase 7 — Airflow UI]`
 
-### Step 12 — Trigger First CI/CD Run
-
-Once all the above is complete, push to `main`:
-```bash
-git add .
-git commit -m "feat: resolve LB_IP placeholders, ready for CI/CD"
-git push origin main
-```
-
-GitHub Actions will:
-1. Build and push Docker images to ACR
-2. Auto-deploy to `dev-*` namespaces
-3. Pause at `uat` and `prod` gates — approve when ready
+Log in to the Airflow UI at `https://dev.eq-tech.<LB_IP>.nip.io/airflow/` and immediately change the password from the default `ChangeMe123!`. In production, disable `defaultUser` in `airflow-values.yaml` and use Entra ID SSO as the Airflow auth backend instead.
 
 ---
 
@@ -2442,11 +2671,11 @@ GitHub Actions will:
 
 **Before starting the numbered sequence, complete these manual steps in order:**
 
-| | Phase | What to do |
-|---|---|---|
-| A | Phase 12.1–12.4 | Create the dev server VM, install tools, create shared venv |
-| B | Phase 3 | Create the OIDC service principal; add `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` secrets to GitHub |
-| C | Phase 4.1–4.3 | Create the Entra ID app registration (placeholder redirect URI for now); add `OAUTH2_CLIENT_ID` and `OAUTH2_CLIENT_SECRET` secrets to GitHub |
+|   | Phase            | What to do                                                                                                                                      |
+| - | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| A | Phase 12.1–12.4 | Create the dev server VM, install tools, create shared venv                                                                                     |
+| B | Phase 3          | Create the OIDC service principal; add`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` secrets to GitHub                     |
+| C | Phase 4.1–4.3   | Create the Entra ID app registration (placeholder redirect URI for now); add`OAUTH2_CLIENT_ID` and `OAUTH2_CLIENT_SECRET` secrets to GitHub |
 
 Then execute the numbered steps in sequence:
 
@@ -2536,35 +2765,35 @@ kubectl get ingress -n dev-apps
 
 ## Phase 14: Verification Checklist
 
-| Test | Command / URL |
-|---|---|
-| AKS nodes ready | `kubectl get nodes` |
-| Airflow pods running | `kubectl get pods -n dev-airflow` |
-| git-sync pulling DAGs | `kubectl logs -n dev-airflow -l component=scheduler -c git-sync` |
-| Airflow UI (dev) | `https://dev.eq-tech.<LB_IP>.nip.io/airflow/` (redirects to Entra ID login) |
-| OAuth2 Proxy redirect | Browse `https://dev.eq-tech.<LB_IP>.nip.io/` → should redirect to Microsoft login |
-| API health (unauthenticated) | `curl https://dev.eq-tech.<LB_IP>.nip.io/api/healthz` → `{"status":"healthy"}` |
-| API me endpoint (authenticated) | Browse `/api/v1/me` after login → returns user, email, groups |
-| Dash app (dev) | `https://dev.eq-tech.<LB_IP>.nip.io/dash/` |
-| Web UI (dev) | `https://dev.eq-tech.<LB_IP>.nip.io/` |
-| Hello World DAG | Trigger manually in Airflow UI → both tasks succeed |
-| Daily ETL DAG | Trigger manually → extract, transform, load tasks succeed |
-| GitHub Actions OIDC | Push to `main` → Actions tab shows dev, then (after approval) uat, then prod |
-| uat deployment | Approve `uat` GitHub Environment → jobs run, `kubectl get pods -n uat-airflow` shows Running |
-| prod deployment | Approve `prod` GitHub Environment → jobs run, `kubectl get pods -n prod-airflow` shows Running |
+| Test                            | Command / URL                                                                                      |
+| ------------------------------- | -------------------------------------------------------------------------------------------------- |
+| AKS nodes ready                 | `kubectl get nodes`                                                                              |
+| Airflow pods running            | `kubectl get pods -n dev-airflow`                                                                |
+| git-sync pulling DAGs           | `kubectl logs -n dev-airflow -l component=scheduler -c git-sync`                                 |
+| Airflow UI (dev)                | `https://dev.eq-tech.<LB_IP>.nip.io/airflow/` (redirects to Entra ID login)                      |
+| OAuth2 Proxy redirect           | Browse`https://dev.eq-tech.<LB_IP>.nip.io/` → should redirect to Microsoft login                |
+| API health (unauthenticated)    | `curl https://dev.eq-tech.<LB_IP>.nip.io/api/healthz` → `{"status":"healthy"}`                |
+| API me endpoint (authenticated) | Browse`/api/v1/me` after login → returns user, email, groups                                    |
+| Dash app (dev)                  | `https://dev.eq-tech.<LB_IP>.nip.io/dash/`                                                       |
+| Web UI (dev)                    | `https://dev.eq-tech.<LB_IP>.nip.io/`                                                            |
+| Hello World DAG                 | Trigger manually in Airflow UI → both tasks succeed                                               |
+| Daily ETL DAG                   | Trigger manually → extract, transform, load tasks succeed                                         |
+| GitHub Actions OIDC             | Push to`main` → Actions tab shows dev, then (after approval) uat, then prod                     |
+| uat deployment                  | Approve`uat` GitHub Environment → jobs run, `kubectl get pods -n uat-airflow` shows Running   |
+| prod deployment                 | Approve`prod` GitHub Environment → jobs run, `kubectl get pods -n prod-airflow` shows Running |
 
 ---
 
 ## Cost Estimate (Azure Trial)
 
-| Resource | SKU | Est. Monthly |
-|---|---|---|
-| AKS – 2× Standard_B4ms nodes | B4ms (4 vCPU / 16 GB) | ~$140 |
-| PostgreSQL Flexible Server | B_Standard_B1ms | ~$15 |
-| Azure Container Registry | Basic | ~$5 |
-| Azure Key Vault | Standard | ~$1 |
-| Developer VM | Standard_B2ms (2 vCPU / 8 GB) | ~$35 |
-| **Total** | | **~$196/month** |
+| Resource                       | SKU                           | Est. Monthly          |
+| ------------------------------ | ----------------------------- | --------------------- |
+| AKS – 2× Standard_B4ms nodes | B4ms (4 vCPU / 16 GB)         | ~$140                 |
+| PostgreSQL Flexible Server     | B_Standard_B1ms               | ~$15                  |
+| Azure Container Registry       | Basic                         | ~$5                   |
+| Azure Key Vault                | Standard                      | ~$1                   |
+| Developer VM                   | Standard_B2ms (2 vCPU / 8 GB) | ~$35                  |
+| **Total**                |                               | **~$196/month** |
 
 > The Azure trial provides **$200 USD credit (30 days)**. To reduce cost, scale the AKS node pool to `Standard_B2s` (2 vCPU / 4 GB, ~$35/node) and delete the developer VM when not in use.
 

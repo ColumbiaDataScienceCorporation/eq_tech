@@ -7,7 +7,7 @@ variable "tenant_id" {
 }
 
 variable "location" {
-  default = "eastus"
+  default = "centralus"
 }
 
 variable "resource_group" {
@@ -54,7 +54,7 @@ variable "aks_node_count" {
 variable "aks_vm_size" {
   description = "AKS node VM size"
   type        = string
-  default     = "Standard_B4ms"
+  default     = "Standard_D4pls_v5"
 }
 
 variable "postgres_sku" {

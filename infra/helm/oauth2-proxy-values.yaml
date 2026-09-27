@@ -1,4 +1,4 @@
-# Replace <LB_IP> with the NGINX Ingress LoadBalancer external IP before deploying.
+# Replace 52.185.94.105 with the NGINX Ingress LoadBalancer external IP before deploying.
 # The chart reads client-id, client-secret, and cookie-secret keys from this secret.
 # Deploy with: helm upgrade -f oauth2-proxy-values.yaml -f oauth2-proxy-values/<env>.yaml
 
@@ -7,7 +7,7 @@ existingSecret: oauth2-proxy-secret
 extraArgs:
   provider: oidc
   oidc-issuer-url: "https://login.microsoftonline.com/e5e33b11-e89c-466a-bf06-e94151676845/v2.0"
-  redirect-url: "https://eq-tech.<LB_IP>.nip.io/oauth2/callback"
+  redirect-url: "https://eq-tech.52.185.94.105.nip.io/oauth2/callback"
   scope: "openid profile email"
   email-domain: "*"
   upstream: "file:///dev/null"
@@ -24,7 +24,7 @@ ingress:
   enabled: true
   className: nginx
   hosts:
-    - host: "eq-tech.<LB_IP>.nip.io"
+    - host: "eq-tech.52.185.94.105.nip.io"
       paths:
         - path: /oauth2
           pathType: Prefix

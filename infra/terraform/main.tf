@@ -41,7 +41,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   dns_prefix          = "eq-tech"
-  kubernetes_version  = "1.30"
+  kubernetes_version  = "1.35"
 
   default_node_pool {
     name       = "system"
@@ -70,11 +70,12 @@ resource "azurerm_postgresql_flexible_server" "pg" {
   name                   = var.postgres_server_name
   resource_group_name    = azurerm_resource_group.main.name
   location               = azurerm_resource_group.main.location
-  version                = "15"
+  version                = "16"
   administrator_login    = var.postgres_admin_user
   administrator_password = var.postgres_admin_password
   storage_mb             = var.postgres_storage_mb
   sku_name               = var.postgres_sku
+  zone                   = "1"
 
   backup_retention_days        = 7
   geo_redundant_backup_enabled = false
