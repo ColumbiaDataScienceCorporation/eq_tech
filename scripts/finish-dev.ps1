@@ -173,6 +173,13 @@ kubectl create secret generic oauth2-proxy-secret --namespace auth `
     --dry-run=client -o yaml | kubectl apply -f - | Out-Null
 Write-Done "oauth2-proxy-secret applied in auth"
 
+# The oauth2-proxy pod caches env vars -- restart it to pick up the rotated secret
+$proxy = kubectl get pods -n auth -l app.kubernetes.io/name=oauth2-proxy -o name 2>$null
+if ($proxy) {
+    kubectl rollout restart deployment/oauth2-proxy -n auth | Out-Null
+    Write-Done "oauth2-proxy restarted to load new secret"
+}
+
 # ────────────────────────────────────────────────────────────────────────────────
 # STEP 11: Deploy OAuth2 Proxy and Airflow dev
 # ────────────────────────────────────────────────────────────────────────────────

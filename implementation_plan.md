@@ -191,7 +191,7 @@ This file defines every dependency installed in the **shared venv on the central
 
 ```
 # Airflow + Kubernetes provider (matches Helm-deployed version)
-apache-airflow==2.9.3
+apache-airflow==2.11.0
 apache-airflow-providers-cncf-kubernetes>=8.0.0
 
 # API
@@ -284,7 +284,7 @@ variable "tenant_id" {
 }
 
 variable "location" {
-  default = "eastus"
+  default = "centralus"  # eastus is blocked for PostgreSQL Flexible Server on trial
 }
 
 variable "resource_group" {
@@ -331,7 +331,8 @@ variable "aks_node_count" {
 variable "aks_vm_size" {
   description = "AKS node VM size"
   type        = string
-  default     = "Standard_B4ms"
+  # B-series not available in centralus on trial; D4pls_v5 is available and cost-effective
+  default     = "Standard_D4pls_v5"
 }
 
 variable "postgres_sku" {
@@ -387,13 +388,14 @@ resource "azurerm_container_registry" "acr" {
   admin_enabled       = false
 }
 
-# AKS Cluster (Standard_B4ms – affordable trial SKU with sufficient memory for Airflow)
+# AKS Cluster (D4pls_v5 – available on trial; ALS required for all versions in centralus)
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = var.aks_cluster_name
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   dns_prefix          = "eq-tech"
-  kubernetes_version  = "1.30"
+  kubernetes_version  = "1.35"
+  support_plan        = "AKSLongTermSupport"
 
   default_node_pool {
     name       = "system"
@@ -427,8 +429,7 @@ resource "azurerm_postgresql_flexible_server" "pg" {
   administrator_password = var.postgres_admin_password
   storage_mb             = var.postgres_storage_mb
   sku_name               = var.postgres_sku
-
-  backup_retention_days        = 7
+  zone                   = "1"  # must be explicitly set to prevent immutable zone drift on re-apply        = 7
   geo_redundant_backup_enabled = false
 }
 
@@ -490,12 +491,14 @@ output "keyvault_uri" {
 **`infra/terraform/environments/dev.tfvars`**
 
 ```hcl
-# Trial-grade: minimal resources to stay within the $200 free credit
+# Trial-grade: minimal resources
+# B-series not available in centralus on trial; D4pls_v5 (ARM, 4 vCPU, 8 GB) is available
 environment         = "dev"
 aks_node_count      = 1
-aks_vm_size         = "Standard_B2ms"
+aks_vm_size         = "Standard_D4pls_v5"
 postgres_sku        = "B_Standard_B1ms"
 postgres_storage_mb = 32768
+location            = "centralus"
 ```
 
 **`infra/terraform/environments/uat.tfvars`**
@@ -503,9 +506,10 @@ postgres_storage_mb = 32768
 ```hcl
 environment         = "uat"
 aks_node_count      = 2
-aks_vm_size         = "Standard_B4ms"
+aks_vm_size         = "Standard_D4ps_v5"
 postgres_sku        = "B_Standard_B2ms"
 postgres_storage_mb = 65536
+location            = "centralus"
 ```
 
 **`infra/terraform/environments/prod.tfvars`**
@@ -513,9 +517,10 @@ postgres_storage_mb = 65536
 ```hcl
 environment         = "prod"
 aks_node_count      = 3
-aks_vm_size         = "Standard_D4s_v3"
+aks_vm_size         = "Standard_D4s_v6"
 postgres_sku        = "GP_Standard_D2s_v3"
 postgres_storage_mb = 131072
+location            = "centralus"
 ```
 
 ### Terraform Workspace Setup and Apply
@@ -557,25 +562,45 @@ az role assignment create \
   --assignee $SP_OBJECT_ID \
   --scope /subscriptions/0702e805-0c66-4bbd-9eb4-47ce81ecb369
 
-# Federated credential for main branch deployments
-az ad app federated-credential create \
-  --id $APP_ID \
-  --parameters '{
-    "name": "github-main-branch",
-    "issuer": "https://token.actions.githubusercontent.com",
-    "subject": "repo:ColumbiaDataScienceCorporation/eq_tech:ref:refs/heads/main",
-    "audiences": ["api://AzureADTokenExchange"]
-  }'
+# AcrPush on the registry — required for GitHub Actions docker push
+az role assignment create \
+  --role AcrPush \
+  --assignee $SP_OBJECT_ID \
+  --scope /subscriptions/0702e805-0c66-4bbd-9eb4-47ce81ecb369/resourceGroups/eq-tech-rg/providers/Microsoft.ContainerRegistry/registries/eqtechacr
 
-# Federated credential for pull request checks
-az ad app federated-credential create \
-  --id $APP_ID \
-  --parameters '{
-    "name": "github-pull-requests",
-    "issuer": "https://token.actions.githubusercontent.com",
-    "subject": "repo:ColumbiaDataScienceCorporation/eq_tech:pull_request",
-    "audiences": ["api://AzureADTokenExchange"]
-  }'
+# NOTE: GitHub Enterprise generates OIDC subjects with org_id and repo_id embedded:
+#   repo:Org@{org_id}/repo@{repo_id}:ref:refs/heads/main
+# AND environment-scoped jobs use :environment:<name> as the subject.
+# Register ALL required variants so every job type can authenticate.
+
+# Standard GitHub.com format (ref/branch and environments)
+for SUBJ in \
+  "repo:ColumbiaDataScienceCorporation/eq_tech:ref:refs/heads/main" \
+  "repo:ColumbiaDataScienceCorporation/eq_tech:pull_request" \
+  "repo:ColumbiaDataScienceCorporation/eq_tech:environment:dev" \
+  "repo:ColumbiaDataScienceCorporation/eq_tech:environment:uat" \
+  "repo:ColumbiaDataScienceCorporation/eq_tech:environment:prod"; do
+  NAME=$(echo $SUBJ | tr ':/' '-' | sed 's/^repo-/github-/')
+  cat > /tmp/fc.json << EOF
+{"name":"$NAME","issuer":"https://token.actions.githubusercontent.com","subject":"$SUBJ","audiences":["api://AzureADTokenExchange"]}
+EOF
+  az ad app federated-credential create --id $APP_ID --parameters @/tmp/fc.json --query name -o tsv 2>/dev/null || true
+done
+
+# GitHub Enterprise format (replace 12076768 with your org ID, 1380689388 with your repo ID
+# — read from the "subject claim" in a failed workflow run log)
+for SUBJ in \
+  "repo:ColumbiaDataScienceCorporation@12076768/eq_tech@1380689388:ref:refs/heads/main" \
+  "repo:ColumbiaDataScienceCorporation@12076768/eq_tech@1380689388:pull_request" \
+  "repo:ColumbiaDataScienceCorporation@12076768/eq_tech@1380689388:environment:dev" \
+  "repo:ColumbiaDataScienceCorporation@12076768/eq_tech@1380689388:environment:uat" \
+  "repo:ColumbiaDataScienceCorporation@12076768/eq_tech@1380689388:environment:prod"; do
+  NAME=$(echo $SUBJ | sed 's/[^a-zA-Z0-9]/-/g' | cut -c1-60)
+  cat > /tmp/fc.json << EOF
+{"name":"ent-$NAME","issuer":"https://token.actions.githubusercontent.com","subject":"$SUBJ","audiences":["api://AzureADTokenExchange"]}
+EOF
+  az ad app federated-credential create --id $APP_ID --parameters @/tmp/fc.json --query name -o tsv 2>/dev/null || true
+done
 
 echo "AZURE_CLIENT_ID = $APP_ID"
 ```
@@ -756,11 +781,13 @@ for ENV in dev uat prod; do
     --from-literal=connection="postgresql+psycopg2://airflow_admin:<PG_PASSWORD>@${PG_FQDN}/airflow_${ENV}"
 
   # git-sync credential: same PAT, replicated per-namespace
-  # Key names must match what the Airflow Helm chart's git-sync v3 container expects
+  # Airflow 2.11+ chart uses git-sync v4 (GITSYNC_*); include v3 keys too for older chart versions
   kubectl create secret generic github-git-sync-token \
     --namespace ${ENV}-airflow \
     --from-literal=GIT_SYNC_USERNAME=x-access-token \
-    --from-literal=GIT_SYNC_PASSWORD=<GITHUB_FINE_GRAINED_PAT>
+    --from-literal=GIT_SYNC_PASSWORD=<GITHUB_FINE_GRAINED_PAT> \
+    --from-literal=GITSYNC_USERNAME=x-access-token \
+    --from-literal=GITSYNC_PASSWORD=<GITHUB_FINE_GRAINED_PAT>
 done
 
 # OAuth2 Proxy secret (shared across all envs in the auth namespace)
@@ -829,11 +856,11 @@ helm upgrade --install oauth2-proxy oauth2-proxy/oauth2-proxy \
 Replace `<LB_IP>` before deploying.
 
 ```yaml
-airflowVersion: "2.9.3"
+airflowVersion: "2.11.0"
 images:
   airflow:
     repository: apache/airflow
-    tag: "2.9.3"
+    tag: "2.11.0"
     pullPolicy: IfNotPresent
 
 executor: "KubernetesExecutor"
@@ -893,7 +920,8 @@ ingress:
     enabled: true
     ingressClassName: nginx
     annotations:
-      nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local/oauth2/auth"
+      # auth-url must include :4180 port — oauth2-proxy service listens on 4180, not 80
+      nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:4180/oauth2/auth"
       nginx.ingress.kubernetes.io/auth-signin: "https://eq-tech.<LB_IP>.nip.io/oauth2/start?rd=$escaped_request_uri"
       nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups"
     hosts:
@@ -2046,7 +2074,7 @@ Verify it works in a new session:
 ssh devadmin@$DEVBOX_IP
 # Shell prompt should show: (venv) devadmin@eq-tech-devbox:~$
 python --version    # Python 3.11.x
-python -c "import airflow; print(airflow.__version__)"  # 2.9.3
+python -c "import airflow; print(airflow.__version__)"  # 2.11.0
 ```
 
 ### 12.5 Per-Developer Disk Quota Enforcement with Auto-Scaling
@@ -2625,10 +2653,12 @@ PG_FQDN=$(terraform -chdir=infra/terraform output -raw postgres_fqdn)
 
 for ENV in dev uat prod; do
   kubectl create secret generic airflow-postgres-secret --namespace ${ENV}-airflow \
-    --from-literal=connection="postgresql+psycopg2://airflow_admin:<PG_PASSWORD>@${PG_FQDN}/airflow_${ENV}"
+    --from-literal=connection="postgresql+psycopg2://airflow_admin:<PG_PASSWORD>@${PG_FQDN}/airflow_${ENV}?sslmode=require"
   kubectl create secret generic github-git-sync-token --namespace ${ENV}-airflow \
     --from-literal=GIT_SYNC_USERNAME=x-access-token \
-    --from-literal=GIT_SYNC_PASSWORD=<GIT_SYNC_TOKEN>
+    --from-literal=GIT_SYNC_PASSWORD=<GIT_SYNC_TOKEN> \
+    --from-literal=GITSYNC_USERNAME=x-access-token \
+    --from-literal=GITSYNC_PASSWORD=<GIT_SYNC_TOKEN>
 done
 
 COOKIE=$(python3 -c "import secrets,base64;print(base64.b64encode(secrets.token_bytes(16)).decode())")

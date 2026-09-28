@@ -120,10 +120,34 @@ if ($roleExists -and $roleExists -notmatch "WARNING|ERROR") {
     Write-Done "Contributor role assigned"
 }
 
-# Federated credentials  -  write JSON to temp files to avoid PowerShell quoting issues
+# AcrPush on the registry -- required for docker push in apps-ci.yml
+$ACR_SCOPE = "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/eq-tech-rg/providers/Microsoft.ContainerRegistry/registries/eqtechacr"
+$acrRole = az role assignment list --assignee $SP_OID --scope $ACR_SCOPE `
+    --query "[?roleDefinitionName=='AcrPush'].id" -o tsv 2>&1
+if ($acrRole -and $acrRole -notmatch "WARNING|ERROR") {
+    Write-Skip "AcrPush role assignment"
+} else {
+    az role assignment create --role AcrPush --assignee $SP_OID --scope $ACR_SCOPE | Out-Null
+    Write-Done "AcrPush role assigned on eqtechacr"
+}
+
+# Federated credentials -- covers main branch, PRs, and GitHub Environments (dev/uat/prod).
+# GitHub Enterprise uses a different subject format (includes @org_id and @repo_id).
+# Both formats are registered so the same SP works regardless of GitHub deployment type.
 $fedCreds = @(
-    @{ name = "github-main-branch"; subject = "repo:${GITHUB_ORG}/${GITHUB_REPO}:ref:refs/heads/main" },
-    @{ name = "github-pull-requests"; subject = "repo:${GITHUB_ORG}/${GITHUB_REPO}:pull_request" }
+    # Standard GitHub.com format
+    @{ name = "github-main-branch";    subject = "repo:${GITHUB_ORG}/${GITHUB_REPO}:ref:refs/heads/main" },
+    @{ name = "github-pull-requests";  subject = "repo:${GITHUB_ORG}/${GITHUB_REPO}:pull_request" },
+    @{ name = "github-env-dev";        subject = "repo:${GITHUB_ORG}/${GITHUB_REPO}:environment:dev"  },
+    @{ name = "github-env-uat";        subject = "repo:${GITHUB_ORG}/${GITHUB_REPO}:environment:uat"  },
+    @{ name = "github-env-prod";       subject = "repo:${GITHUB_ORG}/${GITHUB_REPO}:environment:prod" },
+    # GitHub Enterprise format (org_id and repo_id embedded in subject)
+    # Update 12076768 and 1380689388 if your org/repo IDs differ (read from failed run log)
+    @{ name = "ent-main-branch";    subject = "repo:${GITHUB_ORG}@12076768/${GITHUB_REPO}@1380689388:ref:refs/heads/main" },
+    @{ name = "ent-pull-requests";  subject = "repo:${GITHUB_ORG}@12076768/${GITHUB_REPO}@1380689388:pull_request" },
+    @{ name = "ent-env-dev";        subject = "repo:${GITHUB_ORG}@12076768/${GITHUB_REPO}@1380689388:environment:dev"  },
+    @{ name = "ent-env-uat";        subject = "repo:${GITHUB_ORG}@12076768/${GITHUB_REPO}@1380689388:environment:uat"  },
+    @{ name = "ent-env-prod";       subject = "repo:${GITHUB_ORG}@12076768/${GITHUB_REPO}@1380689388:environment:prod" }
 )
 foreach ($fc in $fedCreds) {
     $existing = az ad app federated-credential list --id $APP_ID `
