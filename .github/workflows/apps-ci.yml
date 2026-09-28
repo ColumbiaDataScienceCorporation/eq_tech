@@ -71,9 +71,13 @@ jobs:
           kubectl apply -f k8s/namespaces.yaml
           kubectl apply -f k8s/apps/ -n dev-apps
           kubectl apply -f k8s/ingress/dev.yaml -n dev-apps
-          kubectl set image deployment/${{ matrix.app.deployment }} \
-            ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
-            -n dev-apps --ignore-not-found
+          if kubectl get deployment/${{ matrix.app.deployment }} -n dev-apps >/dev/null 2>&1; then
+            kubectl set image deployment/${{ matrix.app.deployment }} \
+              ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
+              -n dev-apps
+          else
+            echo "deployment/${{ matrix.app.deployment }} not found in dev-apps; skipping image update"
+          fi
 
   deploy-uat:
     name: Deploy – uat
@@ -98,9 +102,13 @@ jobs:
         run: |
           kubectl apply -f k8s/apps/ -n uat-apps
           kubectl apply -f k8s/ingress/uat.yaml -n uat-apps
-          kubectl set image deployment/${{ matrix.app.deployment }} \
-            ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
-            -n uat-apps --ignore-not-found
+          if kubectl get deployment/${{ matrix.app.deployment }} -n uat-apps >/dev/null 2>&1; then
+            kubectl set image deployment/${{ matrix.app.deployment }} \
+              ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
+              -n uat-apps
+          else
+            echo "deployment/${{ matrix.app.deployment }} not found in uat-apps; skipping image update"
+          fi
 
   deploy-prod:
     name: Deploy – prod
@@ -125,6 +133,10 @@ jobs:
         run: |
           kubectl apply -f k8s/apps/ -n prod-apps
           kubectl apply -f k8s/ingress/prod.yaml -n prod-apps
-          kubectl set image deployment/${{ matrix.app.deployment }} \
-            ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
-            -n prod-apps --ignore-not-found
+          if kubectl get deployment/${{ matrix.app.deployment }} -n prod-apps >/dev/null 2>&1; then
+            kubectl set image deployment/${{ matrix.app.deployment }} \
+              ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
+              -n prod-apps
+          else
+            echo "deployment/${{ matrix.app.deployment }} not found in prod-apps; skipping image update"
+          fi
