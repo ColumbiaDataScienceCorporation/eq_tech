@@ -34,21 +34,25 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
       - name: Build & Push Docker Image to ACR
-        # :latest is ONLY pushed from main so prod deployments always get the production image
+        # AKS node is ARM64 (Standard_D4pls_v5 Ampere Altra); build both arches for portability
         run: |
           az acr login --name ${{ env.ACR_NAME }}
-          docker build \
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
             -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
             -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.ref_name }} \
             -f ${{ matrix.app.path }}/Dockerfile \
+            --push \
             .
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }}
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.ref_name }}
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            docker tag ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
-                       ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:latest
-            docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:latest
+            docker buildx imagetools create \
+              -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:latest \
+              ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }}
           fi
 
   deploy-dev:
