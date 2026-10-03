@@ -1,5 +1,5 @@
-# Airflow + Kubernetes provider (matches Helm-deployed version)
-apache-airflow==2.11.0
+# Airflow provider stubs for DAG authoring (no Airflow runtime - runs in cluster)
+# Use: kubectl exec -n dev-airflow <scheduler-pod> -- airflow dags test <dag_id>
 apache-airflow-providers-cncf-kubernetes>=8.0.0
 
 # API
