@@ -6,7 +6,7 @@ scheduler:
 webserver:
   # Webserver needs more RAM than scheduler; gunicorn + Airflow import is heavy
   resources:
-    requests: { cpu: "500m", memory: "512Mi" }
+    requests: { cpu: "200m", memory: "512Mi" }
     limits:   { cpu: "1",    memory: "1Gi"   }
   # Give gunicorn up to 15 min to start (600s) on a cold node with limited CPU
   startupProbe:
