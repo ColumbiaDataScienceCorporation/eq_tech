@@ -11,7 +11,7 @@ Usage:
     df = pd.read_sql("SELECT * FROM PRICES LIMIT 10", get_snowflake_engine())
 """
 
-from sqlalchemy import create_engine, Engine
+from sqlalchemy import Engine, create_engine
 
 from lib.config.settings import get_settings
 

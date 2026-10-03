@@ -13,8 +13,8 @@ Usage (CSV adapter for dev/testing):
 import csv
 import io
 from abc import ABC, abstractmethod
-from datetime import date
 from dataclasses import dataclass
+from datetime import date
 
 from lib.config.settings import get_settings
 from lib.logging.structured import get_logger
