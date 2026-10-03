@@ -1,8 +1,8 @@
-# Dev overrides: reduced resources for the trial cluster
+# Dev overrides: reduced resources for the demo cluster
 scheduler:
   resources:
-    requests: { cpu: "250m", memory: "256Mi" }
-    limits:   { cpu: "500m", memory: "512Mi" }
+    requests: { cpu: "250m", memory: "512Mi" }
+    limits:   { cpu: "500m", memory: "1Gi"   }
 webserver:
   # Webserver needs more RAM than scheduler; gunicorn + Airflow import is heavy
   resources:
