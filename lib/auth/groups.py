@@ -23,7 +23,8 @@ Flask/Dash usage:
 """
 
 from fastapi import Depends, HTTPException, Request
-from flask import request as flask_request, abort
+from flask import abort
+from flask import request as flask_request
 
 
 def parse_groups(header_value: str) -> list[str]:

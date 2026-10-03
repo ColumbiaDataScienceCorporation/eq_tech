@@ -1,11 +1,12 @@
 from datetime import date
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 
 from lib.auth.groups import get_request_email, get_request_user, require_groups
 from lib.config.settings import get_settings
 from lib.db.models import PortfolioPosition, init_db
-from lib.db.postgres import get_db_session, health_check as pg_health
+from lib.db.postgres import get_db_session
+from lib.db.postgres import health_check as pg_health
 from lib.logging.structured import get_logger
 from lib.portfolio.metrics import summarise_positions
 
