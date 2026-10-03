@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
@@ -27,7 +28,7 @@ with DAG(
     def log_context(**kwargs):
         print(f"DAG run ID    : {kwargs['run_id']}")
         print(f"Logical date  : {kwargs['logical_date']}")
-        print(f"Executor type : KubernetesExecutor")
+        print("Executor type : KubernetesExecutor")
 
     log = PythonOperator(
         task_id="log_context",

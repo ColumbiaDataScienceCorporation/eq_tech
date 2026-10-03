@@ -1,6 +1,6 @@
 import dash
-from dash import dcc, html
 import plotly.graph_objects as go
+from dash import dcc, html
 
 from lib.auth.groups import FlaskGroupAuth
 from lib.config.settings import get_settings
