@@ -504,22 +504,24 @@ location            = "centralus"
 **`infra/terraform/environments/uat.tfvars`**
 
 ```hcl
+# Demo-grade: same sizing as dev to minimise cost
 environment         = "uat"
-aks_node_count      = 2
-aks_vm_size         = "Standard_D4ps_v5"
-postgres_sku        = "B_Standard_B2ms"
-postgres_storage_mb = 65536
+aks_node_count      = 1
+aks_vm_size         = "Standard_D4pls_v5"
+postgres_sku        = "B_Standard_B1ms"
+postgres_storage_mb = 32768
 location            = "centralus"
 ```
 
 **`infra/terraform/environments/prod.tfvars`**
 
 ```hcl
+# Demo-grade: same sizing as dev to minimise cost
 environment         = "prod"
-aks_node_count      = 3
-aks_vm_size         = "Standard_D4s_v6"
-postgres_sku        = "GP_Standard_D2s_v3"
-postgres_storage_mb = 131072
+aks_node_count      = 1
+aks_vm_size         = "Standard_D4pls_v5"
+postgres_sku        = "B_Standard_B1ms"
+postgres_storage_mb = 32768
 location            = "centralus"
 ```
 
@@ -1990,6 +1992,11 @@ az role assignment create \
   --assignee "$VM_PRINCIPAL" \
   --scope /subscriptions/0702e805-0c66-4bbd-9eb4-47ce81ecb369/resourceGroups/eq-tech-rg
 
+# Hard stop every day at 21:00 UTC (5 PM ET) in case the idle script misses
+az vm auto-shutdown \
+  --resource-group eq-tech-rg --name eq-tech-devbox \
+  --time 2100
+
 # Note the public IP for SSH access
 az vm show --resource-group eq-tech-rg --name eq-tech-devbox \
   --show-details --query publicIps -o tsv
@@ -2288,6 +2295,63 @@ ssh devadmin@$DEVBOX_IP sudo tee /etc/cron.d/eq-tech-venv-sync << 'EOF'
 0 2 * * * devadmin cd /opt/eq-tech/repo && git pull && uv pip install --python /opt/eq-tech/venv/bin/python -r requirements/dev.txt >> /var/log/eq-tech-venv-sync.log 2>&1
 EOF
 ```
+
+### 12.10 Idle Auto-Deallocate
+
+Two mechanisms combine to ensure the VM never runs unattended for long:
+
+- **`az vm auto-shutdown`** (added in §12.1) — hard stop at 21:00 UTC daily, regardless of activity.
+- **Idle cron job** (below) — deallocates after 30 consecutive idle minutes (no SSH sessions + 1-min load average < 0.10). Runs every minute. Uses the managed identity from §12.1; no stored credentials needed.
+
+```bash
+ssh devadmin@$DEVBOX_IP sudo tee /usr/local/bin/eq-tech-idle-shutdown.sh << 'SCRIPT'
+#!/bin/bash
+# Deallocates the VM after IDLE_MINUTES of inactivity.
+# Inactivity = no logged-in users AND 1-min load average < 0.10.
+IDLE_MINUTES=30
+STATE=/var/run/eq-tech-idle-count
+
+# Reset counter and exit immediately if any user is logged in
+if [ "$(who | wc -l)" -gt 0 ]; then
+    echo 0 > "$STATE"; exit 0
+fi
+
+# 1-min load average × 100 as integer (e.g. 0.05 → 5, 0.10 → 10)
+LOAD=$(awk '{printf "%d", $1 * 100}' /proc/loadavg)
+COUNT=$(cat "$STATE" 2>/dev/null || echo 0)
+
+if [ "$LOAD" -lt 10 ]; then
+    COUNT=$((COUNT + 1))
+else
+    COUNT=0
+fi
+echo "$COUNT" > "$STATE"
+
+if [ "$COUNT" -ge "$IDLE_MINUTES" ]; then
+    echo 0 > "$STATE"   # reset so a failed deallocate retries after another 30 min
+    logger -t eq-tech-idle-shutdown "Idle ${IDLE_MINUTES} min – deallocating"
+    RESOURCE_ID=$(curl -sf -H "Metadata:true" \
+        "http://169.254.169.254/metadata/instance?api-version=2021-02-01" \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['compute']['resourceId'])")
+    az login --identity --output none
+    az vm deallocate --ids "$RESOURCE_ID" --no-wait
+fi
+SCRIPT
+
+ssh devadmin@$DEVBOX_IP sudo chmod +x /usr/local/bin/eq-tech-idle-shutdown.sh
+
+ssh devadmin@$DEVBOX_IP sudo tee /etc/cron.d/eq-tech-idle-shutdown << 'CRON'
+* * * * * root /usr/local/bin/eq-tech-idle-shutdown.sh
+CRON
+```
+
+To restart the VM after deallocation:
+
+```bash
+az vm start --resource-group eq-tech-rg --name eq-tech-devbox
+```
+
+---
 
 ### 12.9 Create the `.env` File (Step 6c)
 
@@ -2814,18 +2878,55 @@ kubectl get ingress -n dev-apps
 
 ---
 
-## Cost Estimate (Azure Trial)
+## Cost Estimate (Azure Pay-As-You-Go)
 
-| Resource                       | SKU                           | Est. Monthly          |
-| ------------------------------ | ----------------------------- | --------------------- |
-| AKS – 2× Standard_B4ms nodes | B4ms (4 vCPU / 16 GB)         | ~$140                 |
-| PostgreSQL Flexible Server     | B_Standard_B1ms               | ~$15                  |
-| Azure Container Registry       | Basic                         | ~$5                   |
-| Azure Key Vault                | Standard                      | ~$1                   |
-| Developer VM                   | Standard_B2ms (2 vCPU / 8 GB) | ~$35                  |
-| **Total**                |                               | **~$196/month** |
+*Verified 2026-10-03 against live Azure resources.*
 
-> The Azure trial provides **$200 USD credit (30 days)**. To reduce cost, scale the AKS node pool to `Standard_B2s` (2 vCPU / 4 GB, ~$35/node) and delete the developer VM when not in use.
+### Currently Provisioned
+
+| Resource | SKU / Config | Est. Monthly (PAYG) |
+| ---------------------------------- | ------------------------------------------------- | -------------------- |
+| AKS – 1× node | Standard_D4pls_v5 (Arm, 4 vCPU / 8 GiB), Free tier | ~$99 |
+| PostgreSQL Flexible Server | B_Standard_B1ms (1 vCPU / 2 GiB) + 32 GiB storage | ~$16 |
+| Azure Container Registry | Basic tier | ~$5 |
+| Azure Key Vault | Standard tier | ~$1 |
+| **Current monthly total** | | **~$121/month** |
+
+Developer VM (`eq-tech-devbox`) and UAT/prod environments are not yet provisioned.
+
+---
+
+### Full Platform — All Environments Running Simultaneously
+
+All three environments use the same demo-grade sizing (matches `dev.tfvars`, `uat.tfvars`, `prod.tfvars`):
+
+| Environment | AKS nodes | PostgreSQL + storage | Subtotal |
+| ----------- | ------------------------------------ | ------------------------------------- | -------- |
+| dev | 1× Standard_D4pls_v5 → ~$99 | B_Standard_B1ms + 32 GiB → ~$16 | **~$115** |
+| uat | 1× Standard_D4pls_v5 → ~$99 | B_Standard_B1ms + 32 GiB → ~$16 | **~$115** |
+| prod | 1× Standard_D4pls_v5 → ~$99 | B_Standard_B1ms + 32 GiB → ~$16 | **~$115** |
+
+| Shared resource | SKU | Est. Monthly |
+| --------------- | ------------------- | ------------ |
+| Azure Container Registry | Basic | ~$5 |
+| Azure Key Vault | Standard | ~$1 |
+| Developer VM (24/7) | Standard_B2ms (not yet provisioned) | ~$69 |
+
+**Grand total when fully deployed:** **~$420/month** (~$351/month with dev VM stopped when idle)
+
+---
+
+### Remaining Cost Opportunity
+
+| Component | Current | Alternative | Saving |
+| --------- | ------- | ----------- | ------ |
+| AKS node VM (all envs) | D4pls_v5 $99.28/node | **D4pls_v6** (Azure Cobalt 100, $90.52) — unrestricted in centralus, left as-is (proven stable vs untested) | ~$9/node/mo |
+
+ACR Basic, Key Vault Standard, PostgreSQL B1ms, and AKS Free tier are already the minimum available options.
+
+> **OS disk costs** (~$20/month per AKS node) are not included above.
+
+
 
 ---
 

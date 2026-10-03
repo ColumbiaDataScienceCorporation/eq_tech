@@ -84,8 +84,49 @@ az role assignment create \
   --assignee "$VM_PRINCIPAL" \
   --scope /subscriptions/0702e805-0c66-4bbd-9eb4-47ce81ecb369/resourceGroups/eq-tech-rg
 
+# Hard stop every day at 21:00 UTC (5 PM ET) in case the idle script misses
+az vm auto-shutdown \
+  --resource-group eq-tech-rg --name eq-tech-devbox \
+  --time 2100
+
 DEVBOX_IP=$(az vm show --resource-group eq-tech-rg --name eq-tech-devbox \
   --show-details --query publicIps -o tsv)
+```
+
+### 3.1b Idle Auto-Deallocate
+
+Install a cron job that deallocates the VM after 30 consecutive idle minutes (no SSH sessions + load average < 0.10). Requires §3.2 (az CLI) to be installed first.
+
+```bash
+ssh devadmin@$DEVBOX_IP sudo tee /usr/local/bin/eq-tech-idle-shutdown.sh << 'SCRIPT'
+#!/bin/bash
+# Deallocates the VM after IDLE_MINUTES of inactivity.
+IDLE_MINUTES=30
+STATE=/var/run/eq-tech-idle-count
+
+[ "$(who | wc -l)" -gt 0 ] && { echo 0 > "$STATE"; exit 0; }
+
+LOAD=$(awk '{printf "%d", $1 * 100}' /proc/loadavg)
+COUNT=$(cat "$STATE" 2>/dev/null || echo 0)
+
+if [ "$LOAD" -lt 10 ]; then COUNT=$((COUNT + 1)); else COUNT=0; fi
+echo "$COUNT" > "$STATE"
+
+if [ "$COUNT" -ge "$IDLE_MINUTES" ]; then
+    echo 0 > "$STATE"
+    logger -t eq-tech-idle-shutdown "Idle ${IDLE_MINUTES} min – deallocating"
+    RESOURCE_ID=$(curl -sf -H "Metadata:true" \
+        "http://169.254.169.254/metadata/instance?api-version=2021-02-01" \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['compute']['resourceId'])")
+    az login --identity --output none
+    az vm deallocate --ids "$RESOURCE_ID" --no-wait
+fi
+SCRIPT
+
+ssh devadmin@$DEVBOX_IP sudo chmod +x /usr/local/bin/eq-tech-idle-shutdown.sh
+ssh devadmin@$DEVBOX_IP sudo tee /etc/cron.d/eq-tech-idle-shutdown << 'CRON'
+* * * * * root /usr/local/bin/eq-tech-idle-shutdown.sh
+CRON
 ```
 
 ### 3.2 Install Tools
@@ -729,17 +770,11 @@ Adding UAT (2 nodes B4ms) adds ~$140/month. Adding prod (3 nodes D4s_v3) adds ~$
 
 ### 13.2 Stop the Dev Server When Not in Use
 
-The dev server incurs cost even when idle. Use scheduled start/stop:
+The auto-shutdown schedule (21:00 UTC) and idle-deallocate cron (§3.1b) handle this automatically. To manually restart:
 
 ```bash
-# Deallocate at end of day (saves ~70% of VM cost)
-az vm deallocate --resource-group eq-tech-rg --name eq-tech-devbox
-
-# Start in the morning
 az vm start --resource-group eq-tech-rg --name eq-tech-devbox
 ```
-
-Or set up an Azure Automation schedule to do this automatically.
 
 ### 13.3 Scale AKS to Zero When Not Working
 
