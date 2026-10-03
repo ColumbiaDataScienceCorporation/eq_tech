@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
+
 from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from kubernetes.client import models as k8s

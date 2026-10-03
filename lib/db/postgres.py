@@ -15,8 +15,8 @@ Usage:
 from contextlib import contextmanager
 from typing import Generator
 
-from sqlalchemy import create_engine, text, Engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from lib.config.settings import get_settings
 
