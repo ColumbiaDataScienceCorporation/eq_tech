@@ -15,3 +15,7 @@ ingress:
     hosts:
       - name: "uat.eq-tech.52.185.94.105.nip.io"
     path: "/airflow"
+
+dags:
+  gitSync:
+    branch: "uat"

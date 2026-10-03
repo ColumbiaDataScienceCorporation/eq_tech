@@ -1,8 +1,8 @@
-name: Airflow Helm Deploy
+﻿name: Airflow Helm Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [develop, uat, main]
     paths:
       - "infra/helm/airflow-values.yaml"
       - "infra/helm/airflow-values/**"
@@ -15,13 +15,13 @@ permissions:
 
 jobs:
   deploy-dev:
-    name: Helm Upgrade Airflow – dev
+    name: Helm Upgrade Airflow - dev
+    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: dev
     steps:
       - uses: actions/checkout@v4
-      - name: Azure Login (OIDC)
-        uses: azure/login@v2
+      - uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -32,18 +32,16 @@ jobs:
       - name: Helm Upgrade Airflow (dev)
         run: |
           helm upgrade --install airflow-dev apache-airflow/airflow \
-            --namespace dev-airflow \
-            --create-namespace \
+            --namespace dev-airflow --create-namespace \
             -f infra/helm/airflow-values.yaml \
             -f infra/helm/airflow-values/dev.yaml \
-            --timeout 10m \
-            --rollback-on-failure
+            --rollback-on-failure --timeout 20m
 
   deploy-uat:
-    name: Helm Upgrade Airflow – uat
+    name: Helm Upgrade Airflow - uat
+    if: github.ref == 'refs/heads/uat'
     runs-on: ubuntu-latest
     environment: uat
-    needs: [deploy-dev]
     steps:
       - uses: actions/checkout@v4
       - uses: azure/login@v2
@@ -57,18 +55,16 @@ jobs:
       - name: Helm Upgrade Airflow (uat)
         run: |
           helm upgrade --install airflow-uat apache-airflow/airflow \
-            --namespace uat-airflow \
-            --create-namespace \
+            --namespace uat-airflow --create-namespace \
             -f infra/helm/airflow-values.yaml \
             -f infra/helm/airflow-values/uat.yaml \
-            --timeout 10m \
-            --rollback-on-failure
+            --rollback-on-failure --timeout 20m
 
   deploy-prod:
-    name: Helm Upgrade Airflow – prod
+    name: Helm Upgrade Airflow - prod
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: prod
-    needs: [deploy-uat]
     steps:
       - uses: actions/checkout@v4
       - uses: azure/login@v2
@@ -82,9 +78,7 @@ jobs:
       - name: Helm Upgrade Airflow (prod)
         run: |
           helm upgrade --install airflow-prod apache-airflow/airflow \
-            --namespace prod-airflow \
-            --create-namespace \
+            --namespace prod-airflow --create-namespace \
             -f infra/helm/airflow-values.yaml \
             -f infra/helm/airflow-values/prod.yaml \
-            --timeout 10m \
-            --rollback-on-failure
+            --rollback-on-failure --timeout 20m

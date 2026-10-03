@@ -1,8 +1,8 @@
-name: Apps CI/CD
+﻿name: Apps CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [develop, uat, main]
     paths:
       - "apps/**"
       - "k8s/**"
@@ -19,15 +19,14 @@ env:
 
 jobs:
   build:
-    name: Build & Push – ${{ matrix.app.name }}
+    name: Build & Push - ${{ matrix.app.name }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         app:
-          # deployment/container fields map to the names used in k8s/apps/*.yaml
-          - { name: api,     path: apps/api,     image: api,     deployment: api,      container: api      }
-          - { name: ui-dash, path: apps/ui-dash,  image: ui-dash, deployment: dash-app, container: dash-app }
-          - { name: ui-web,  path: apps/ui-web,   image: ui-web,  deployment: web-ui,   container: web-ui   }
+          - { name: api,     path: apps/api,    image: api,     deployment: api,      container: api      }
+          - { name: ui-dash, path: apps/ui-dash, image: ui-dash, deployment: dash-app, container: dash-app }
+          - { name: ui-web,  path: apps/ui-web,  image: ui-web,  deployment: web-ui,   container: web-ui   }
     steps:
       - uses: actions/checkout@v4
       - uses: azure/login@v2
@@ -36,19 +35,25 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Build & Push Docker Image to ACR
-        # ACR Tasks (az acr build) are blocked on trial; use docker build + az acr login instead
+        # :latest is ONLY pushed from main so prod deployments always get the production image
         run: |
           az acr login --name ${{ env.ACR_NAME }}
           docker build \
             -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
-            -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:latest \
+            -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.ref_name }} \
             -f ${{ matrix.app.path }}/Dockerfile \
             .
           docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }}
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:latest
+          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.ref_name }}
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            docker tag ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
+                       ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:latest
+            docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:latest
+          fi
 
   deploy-dev:
-    name: Deploy – dev
+    name: Deploy - dev
+    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: dev
     needs: [build]
@@ -75,15 +80,14 @@ jobs:
             kubectl set image deployment/${{ matrix.app.deployment }} \
               ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
               -n dev-apps
-          else
-            echo "deployment/${{ matrix.app.deployment }} not found in dev-apps; skipping image update"
           fi
 
   deploy-uat:
-    name: Deploy – uat
+    name: Deploy - uat
+    if: github.ref == 'refs/heads/uat'
     runs-on: ubuntu-latest
     environment: uat
-    needs: [deploy-dev]
+    needs: [build]
     strategy:
       matrix:
         app:
@@ -106,15 +110,14 @@ jobs:
             kubectl set image deployment/${{ matrix.app.deployment }} \
               ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
               -n uat-apps
-          else
-            echo "deployment/${{ matrix.app.deployment }} not found in uat-apps; skipping image update"
           fi
 
   deploy-prod:
-    name: Deploy – prod
+    name: Deploy - prod
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: prod
-    needs: [deploy-uat]
+    needs: [build]
     strategy:
       matrix:
         app:
@@ -137,6 +140,4 @@ jobs:
             kubectl set image deployment/${{ matrix.app.deployment }} \
               ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
               -n prod-apps
-          else
-            echo "deployment/${{ matrix.app.deployment }} not found in prod-apps; skipping image update"
           fi
