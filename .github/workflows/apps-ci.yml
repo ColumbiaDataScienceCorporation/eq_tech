@@ -7,6 +7,7 @@ on:
       - "apps/**"
       - "k8s/**"
       - "lib/**"
+      - ".github/workflows/apps-ci.yml"
   workflow_dispatch:
 
 permissions:
