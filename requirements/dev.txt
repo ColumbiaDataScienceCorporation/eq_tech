@@ -1,6 +1,4 @@
-# Airflow provider stubs for DAG authoring (no Airflow runtime - runs in cluster)
-# Use: kubectl exec -n dev-airflow <scheduler-pod> -- airflow dags test <dag_id>
-apache-airflow-providers-cncf-kubernetes>=8.0.0
+# Airflow runs in the cluster; DAG imports are validated on deploy, not locally.
 
 # API
 fastapi==0.111.0
