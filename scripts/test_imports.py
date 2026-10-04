@@ -11,6 +11,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))          # repo r
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "apps", "api"))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "apps", "ui-dash"))
 
+# Validate settings load with no env vars set (simulates a bare container)
+_saved = os.environ.pop("EQTECH_ENVIRONMENT", None)
+try:
+    from lib.config.settings import get_settings as _gs; _gs()
+    print("  [OK]  settings load without env vars (bare container check)")
+except Exception as e:
+    print(f"  [XX]  settings load without env vars: {e}")
+finally:
+    if _saved:
+        os.environ["EQTECH_ENVIRONMENT"] = _saved
+
 TESTS = [
     ("lib.auth.groups",        "from lib.auth.groups import require_groups, FlaskGroupAuth"),
     ("lib.config.settings",    "from lib.config.settings import get_settings; get_settings()"),
