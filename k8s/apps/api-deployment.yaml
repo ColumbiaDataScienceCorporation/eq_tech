@@ -20,6 +20,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: eq-tech-groups
+            - secretRef:
+                name: eq-tech-secrets
           livenessProbe:
             httpGet:
               path: /healthz
@@ -28,8 +30,8 @@ spec:
             periodSeconds: 30
           resources:
             requests:
-              cpu: "250m"
-              memory: "256Mi"
+              cpu: "100m"
+              memory: "128Mi"
             limits:
               cpu: "500m"
               memory: "512Mi"

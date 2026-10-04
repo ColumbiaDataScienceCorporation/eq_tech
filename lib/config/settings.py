@@ -76,6 +76,8 @@ class Settings(BaseSettings):
 
     # ── Application ──────────────────────────────────────────────────────────
     log_level: str = ""  # resolved in @model_validator below
+    # Set False to bypass Entra group checks (e.g. direct port-forward without OAuth2 proxy)
+    require_group_auth: bool = True
 
     @field_validator("environment", mode="before")
     @classmethod
