@@ -1,5 +1,4 @@
 """Tests for lib.auth.groups."""
-import pytest
 
 
 def test_require_groups_importable():
@@ -14,7 +13,6 @@ def test_flask_group_auth_importable():
 
 def test_flask_imports_are_optional(monkeypatch):
     """Groups module must import even when flask is absent (API container has no flask)."""
-    import importlib
     import lib.auth.groups as mod
     # Verify the module already loaded without error
     assert hasattr(mod, "FlaskGroupAuth")

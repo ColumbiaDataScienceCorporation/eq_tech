@@ -1,5 +1,4 @@
 """Tests for apps/api."""
-import os
 from unittest.mock import patch
 
 import pytest
@@ -11,6 +10,7 @@ def client():
     # Patch init_db so we don't need a real database
     with patch("apps.api.main.init_db"):
         import importlib
+
         import apps.api.main as api_mod
         importlib.reload(api_mod)
         yield TestClient(api_mod.app)
@@ -42,6 +42,7 @@ def test_startup_does_not_crash_when_db_unavailable():
     from sqlalchemy.exc import OperationalError
     with patch("apps.api.main.init_db", side_effect=OperationalError("no password", None, None)):
         import importlib
+
         import apps.api.main as api_mod
         importlib.reload(api_mod)
         from fastapi.testclient import TestClient

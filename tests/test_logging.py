@@ -1,9 +1,8 @@
 """Tests for lib.logging.structured."""
-import pytest
 
 
 def test_get_logger_returns_structured_logger():
-    from lib.logging.structured import get_logger, StructuredLogger
+    from lib.logging.structured import StructuredLogger, get_logger
     log = get_logger("test")
     assert isinstance(log, StructuredLogger)
 
