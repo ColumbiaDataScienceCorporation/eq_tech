@@ -1,12 +1,16 @@
-# UAT overrides: production-like sizing for realistic load testing
+# Demo-grade sizing (same as dev) — single-node cluster can't fit production-like requests
 scheduler:
   resources:
-    requests: { cpu: "500m", memory: "512Mi" }
-    limits:   { cpu: "1",     memory: "1Gi"   }
+    requests: { cpu: "250m", memory: "512Mi" }
+    limits:   { cpu: "500m", memory: "1Gi"   }
 webserver:
   resources:
-    requests: { cpu: "250m", memory: "256Mi" }
-    limits:   { cpu: "500m", memory: "512Mi" }
+    requests: { cpu: "200m", memory: "512Mi" }
+    limits:   { cpu: "1",    memory: "1Gi"   }
+  startupProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 90
 config:
   webserver:
     base_url: "https://uat.eq-tech.52.185.94.105.nip.io/airflow"
