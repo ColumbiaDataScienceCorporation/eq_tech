@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     @field_validator("environment", mode="before")
     @classmethod
     def normalise_env(cls, v) -> str:
-        # Enum default passes the Enum instance; extract .value so str(v) doesn't give 'Environment.DEV'
+        # Enum default arrives as an Enum instance; extract .value to avoid 'environment.dev'
         if hasattr(v, "value"):
             return v.value
         return str(v).lower()
