@@ -115,7 +115,8 @@ helm repo update 2>&1 | Out-Null
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx `
     --namespace ingress-nginx `
     --create-namespace `
-    --set controller.replicaCount=1
+    --set controller.replicaCount=1 `
+    --set "controller.service.annotations.service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path=/healthz"
 Write-Done "NGINX Ingress installed"
 
 # ── 7c: Create Kubernetes namespaces ─────────────────────────────────────────

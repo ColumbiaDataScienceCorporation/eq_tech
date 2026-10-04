@@ -350,3 +350,196 @@ the dash deployment is the only toggle that needs reverting.
 - [ ] `EQTECH_REQUIRE_GROUP_AUTH=false` env var removed from dash deployments
 - [ ] Login test: browser reaches Entra login page, redirects back, Dash loads without 403
 - [ ] `/api/v1/me` returns non-empty `groups` array
+
+---
+
+## Troubleshooting: Azure LB Floating IP Not Delivering VIP Traffic
+
+### Diagnosis
+
+After deploying cert-manager and per-env oauth2-proxy, TLS certificate issuance via
+Let's Encrypt HTTP-01 fails with:
+
+```
+Timeout during connect (likely firewall problem)
+52.185.94.105: Fetching http://dev.eq-tech.52.185.94.105.nip.io/.well-known/acme-challenge/...
+```
+
+Direct TCP tests from any internet-connected host also fail for both ports:
+
+```powershell
+Test-NetConnection -ComputerName 52.185.94.105 -Port 80  # False
+Test-NetConnection -ComputerName 52.185.94.105 -Port 443 # False
+```
+
+### Root Cause
+
+**The Azure LB health probe was returning HTTP 404 from NGINX since day 1**, causing
+the LB to permanently mark the backend as unhealthy and stop routing all external traffic.
+
+The AKS cloud-controller creates the LB health probe with `RequestPath: /`. NGINX ingress
+responds to `/` with 404 (no ingress rule matches the node's internal IP as Host). Azure LB
+considers anything outside 2xx/3xx as unhealthy, so the backend was always unhealthy.
+
+Confirmed diagnosis:
+```powershell
+# 404 = backend unhealthy = LB drops all external traffic
+kubectl run probe-test --image=busybox --restart=Never -- \
+  sh -c "wget -q -S -O /dev/null http://10.224.0.4:31726/ 2>&1"
+# → HTTP/1.1 404 Not Found
+
+# 200 = NGINX's own healthz endpoint
+kubectl run probe-test --image=busybox --restart=Never -- \
+  sh -c "wget -q -S -O /dev/null http://10.224.0.4:31726/healthz 2>&1"
+# → HTTP/1.1 200 OK
+```
+
+All other symptoms (zero iptables packets for 52.185.94.105, TCP timeouts from internet,
+NSG rules appearing correct) were downstream effects of the unhealthy backend.
+
+### Fix (RESOLVED)
+
+Update both Azure LB health probes to use `/healthz` (returns 200 from NGINX ingress):
+
+```powershell
+$aksRg = az aks show -g eq-tech-rg -n eq-tech-aks --query nodeResourceGroup -o tsv
+az network lb probe update -g $aksRg --lb-name kubernetes \
+  --name "a841e94387bed4a6cbe7d8b171ae4ccc-TCP-80"  --path "/healthz"
+az network lb probe update -g $aksRg --lb-name kubernetes \
+  --name "a841e94387bed4a6cbe7d8b171ae4ccc-TCP-443" --path "/healthz"
+```
+
+Annotate the Kubernetes service so this survives cloud-controller reconciliation:
+
+```powershell
+kubectl annotate svc ingress-nginx-controller -n ingress-nginx \
+  "service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path=/healthz" \
+  --overwrite
+```
+
+After this fix:
+- `Test-NetConnection 52.185.94.105 -Port 80` → `True`
+- `Test-NetConnection 52.185.94.105 -Port 443` → `True`
+- All 6 TLS certificates issued (`kubectl get certificate -A` → all `Ready: True`)
+- `https://dev.eq-tech.52.185.94.105.nip.io/` → 302 redirect to oauth2 login
+
+### Permanent fix in `k8s/ingress-nginx-values.yaml`
+
+Add to the ingress-nginx Helm values to make this permanent across future redeployments:
+
+```yaml
+controller:
+  service:
+    annotations:
+      service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: "/healthz"
+```
+
+### Fix Sequence (try in order, stop at first success)
+
+After each fix, test with:
+
+```powershell
+Test-NetConnection -ComputerName 52.185.94.105 -Port 80
+# Then trigger fresh certs:
+kubectl delete certificate --all -n dev-apps
+kubectl get certificate -n dev-apps -w
+```
+
+---
+
+#### Fix A — Force cloud-controller-manager to reconcile the service
+
+Add `spec.loadBalancerIP` to pin the existing IP. The cloud controller detects the
+change, re-processes the service, and refreshes the Azure LB / NIC Floating IP config.
+
+```powershell
+kubectl patch svc ingress-nginx-controller -n ingress-nginx --type merge -p "{""spec"":{""loadBalancerIP"":""52.185.94.105""}}"
+# Wait 60s for cloud controller to process
+Start-Sleep -Seconds 60
+Test-NetConnection -ComputerName 52.185.94.105 -Port 80
+```
+
+---
+
+#### Fix B — Annotate the service to force AKS LB health-probe rule refresh
+
+AKS cloud-controller watches for annotation changes and re-reconciles on any update.
+
+```powershell
+kubectl annotate svc ingress-nginx-controller -n ingress-nginx `
+  service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path="/" --overwrite
+Start-Sleep -Seconds 60
+Test-NetConnection -ComputerName 52.185.94.105 -Port 80
+```
+
+---
+
+#### Fix C — Cordon, drain, and uncordon the AKS node
+
+Forces AKS to re-register the node with the Azure LB backend pool, triggering a full
+NIC configuration refresh.
+
+```powershell
+$node = kubectl get node -o jsonpath="{.items[0].metadata.name}"
+kubectl cordon $node
+kubectl drain $node --ignore-daemonsets --delete-emptydir-data --force --timeout=120s
+kubectl uncordon $node
+# Wait for node to become Ready and pods to reschedule
+kubectl get nodes -w
+Start-Sleep -Seconds 90
+Test-NetConnection -ComputerName 52.185.94.105 -Port 80
+```
+
+> This causes a brief service interruption (~2-3 minutes) while pods reschedule.
+
+---
+
+#### Fix D — Delete and recreate the ingress-nginx LoadBalancer service
+
+The most disruptive but most reliable fix. Preserves the static IP via `loadBalancerIP`.
+
+```powershell
+# 1. Export the current service definition
+kubectl get svc ingress-nginx-controller -n ingress-nginx -o yaml > /tmp/nginx-svc-backup.yaml
+
+# 2. Delete the service (Azure LB rules are removed, but the static Public IP remains)
+kubectl delete svc ingress-nginx-controller -n ingress-nginx
+
+# 3. Recreate with loadBalancerIP to reclaim the same IP
+kubectl patch svc ingress-nginx-controller -n ingress-nginx --dry-run=client # verify gone
+helm upgrade ingress-nginx ingress-nginx/ingress-nginx `
+  --namespace ingress-nginx --reuse-values `
+  --set "controller.service.loadBalancerIP=52.185.94.105" `
+  --wait --timeout 120s
+
+Test-NetConnection -ComputerName 52.185.94.105 -Port 80
+```
+
+---
+
+#### Fix E — AKS scale cycle (last resort)
+
+Scaling to 0 and back forces Azure to provision a fresh VMSS instance and fully
+re-configure its NIC for the LB, including Floating IP rules.
+
+```powershell
+# Scale to 0 (pauses all workloads)
+az aks nodepool scale -g eq-tech-rg --cluster-name eq-tech-aks --name system --node-count 0
+
+# Wait for scale-down to complete
+az aks nodepool show -g eq-tech-rg --cluster-name eq-tech-aks --name system --query provisioningState -o tsv
+
+# Scale back to 1 -- Azure provisions a new VM and configures its NIC
+az aks nodepool scale -g eq-tech-rg --cluster-name eq-tech-aks --name system --node-count 1
+
+# Wait for node Ready
+kubectl get nodes -w
+
+# Refresh kubectl credentials
+az aks get-credentials -g eq-tech-rg -n eq-tech-aks --overwrite-existing
+
+Test-NetConnection -ComputerName 52.185.94.105 -Port 80
+```
+
+> All pods will be evicted and must reschedule. Run `scripts/resume-infra.ps1` after
+> which handles the AKS scale-up and kubectl credential refresh automatically.
