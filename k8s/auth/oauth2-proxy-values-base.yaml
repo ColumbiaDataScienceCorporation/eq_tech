@@ -20,13 +20,9 @@ extraArgs:
   oidc-groups-claim: "groups"
   upstream: "file:///dev/null"
 
-image:
-  repository: quay.io/oauth2-proxy/oauth2-proxy
-  tag: v7.15.3
-
 service:
   type: ClusterIP
-  port: 4180
+  portNumber: 4180
 
 resources:
   requests:

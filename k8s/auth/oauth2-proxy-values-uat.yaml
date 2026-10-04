@@ -3,15 +3,13 @@ extraArgs:
 
 ingress:
   enabled: true
-  ingressClassName: nginx
+  className: nginx
+  path: /oauth2
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
   hosts:
-    - host: uat.eq-tech.52.185.94.105.nip.io
-      paths:
-        - path: /oauth2
-          pathType: Prefix
+    - uat.eq-tech.52.185.94.105.nip.io
   tls:
     - secretName: uat-oauth2-proxy-tls
       hosts:

@@ -12,3 +12,8 @@ spec:
       - http01:
           ingress:
             ingressClassName: nginx
+            ingressTemplate:
+              metadata:
+                annotations:
+                  # Prevent ssl-redirect from blocking the HTTP-01 ACME challenge path
+                  nginx.ingress.kubernetes.io/ssl-redirect: "false"
