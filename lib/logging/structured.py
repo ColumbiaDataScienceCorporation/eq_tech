@@ -70,24 +70,24 @@ class StructuredLogger:
     def __init__(self, logger: logging.Logger) -> None:
         self._log = logger
 
-    def _emit(self, level: int, msg: str, **kwargs: Any) -> None:
+    def _emit(self, level: int, msg: str, *args: Any, **kwargs: Any) -> None:
         exc_info = kwargs.pop("exc_info", None)
         stack_info = kwargs.pop("stack_info", False)
-        self._log.log(level, msg, exc_info=exc_info, stack_info=stack_info,
+        self._log.log(level, msg, *args, exc_info=exc_info, stack_info=stack_info,
                       extra=kwargs or None, stacklevel=2)
 
-    def debug(self, msg: str, **kwargs: Any) -> None:
-        self._emit(logging.DEBUG, msg, **kwargs)
+    def debug(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        self._emit(logging.DEBUG, msg, *args, **kwargs)
 
-    def info(self, msg: str, **kwargs: Any) -> None:
-        self._emit(logging.INFO, msg, **kwargs)
+    def info(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        self._emit(logging.INFO, msg, *args, **kwargs)
 
-    def warning(self, msg: str, **kwargs: Any) -> None:
-        self._emit(logging.WARNING, msg, **kwargs)
+    def warning(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        self._emit(logging.WARNING, msg, *args, **kwargs)
 
-    def error(self, msg: str, **kwargs: Any) -> None:
-        self._emit(logging.ERROR, msg, **kwargs)
+    def error(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        self._emit(logging.ERROR, msg, *args, **kwargs)
 
-    def exception(self, msg: str, **kwargs: Any) -> None:
+    def exception(self, msg: str, *args: Any, **kwargs: Any) -> None:
         kwargs["exc_info"] = True
-        self._emit(logging.ERROR, msg, **kwargs)
+        self._emit(logging.ERROR, msg, *args, **kwargs)
