@@ -22,7 +22,7 @@ def startup() -> None:
     try:
         init_db()
     except Exception as exc:
-        log.warning("DB unavailable at startup, will retry on first request: %s", exc)
+        log.warning(f"DB unavailable at startup, will retry on first request: {exc}")
     log.info("API started")
 
 
