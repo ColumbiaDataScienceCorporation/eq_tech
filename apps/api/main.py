@@ -22,8 +22,8 @@ def startup() -> None:
     try:
         init_db()
     except Exception as exc:
-        log.warning("DB unavailable at startup (will retry on first request)", error=str(exc))
-    log.info("API started", environment=settings.environment.value)
+        log.warning("DB unavailable at startup, will retry on first request: %s", exc)
+    log.info("API started")
 
 
 @app.get("/healthz")

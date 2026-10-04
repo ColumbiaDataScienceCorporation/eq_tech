@@ -45,20 +45,49 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(entry, default=str)
 
 
-def get_logger(name: str) -> logging.Logger:
+def get_logger(name: str) -> "StructuredLogger":
     """
     Return a named logger that emits JSON lines to stdout.
-    The log level is resolved from Settings (DEBUG in dev, INFO elsewhere).
-    Calling this multiple times with the same name is safe.
+    Accepts arbitrary keyword arguments as structured fields:
+        log.info("msg", portfolio_id="P001", count=42)
     """
     settings = get_settings()
-    logger = logging.getLogger(name)
+    _inner = logging.getLogger(name)
 
-    if not logger.handlers:
+    if not _inner.handlers:
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(_JsonFormatter())
-        logger.addHandler(handler)
-        logger.propagate = False
+        _inner.addHandler(handler)
+        _inner.propagate = False
 
-    logger.setLevel(settings.log_level.upper())
-    return logger
+    _inner.setLevel(settings.log_level.upper())
+    return StructuredLogger(_inner)
+
+
+class StructuredLogger:
+    """Thin wrapper so callers can pass extra fields as kwargs rather than extra={}."""
+
+    def __init__(self, logger: logging.Logger) -> None:
+        self._log = logger
+
+    def _emit(self, level: int, msg: str, **kwargs: Any) -> None:
+        exc_info = kwargs.pop("exc_info", None)
+        stack_info = kwargs.pop("stack_info", False)
+        self._log.log(level, msg, exc_info=exc_info, stack_info=stack_info,
+                      extra=kwargs or None, stacklevel=2)
+
+    def debug(self, msg: str, **kwargs: Any) -> None:
+        self._emit(logging.DEBUG, msg, **kwargs)
+
+    def info(self, msg: str, **kwargs: Any) -> None:
+        self._emit(logging.INFO, msg, **kwargs)
+
+    def warning(self, msg: str, **kwargs: Any) -> None:
+        self._emit(logging.WARNING, msg, **kwargs)
+
+    def error(self, msg: str, **kwargs: Any) -> None:
+        self._emit(logging.ERROR, msg, **kwargs)
+
+    def exception(self, msg: str, **kwargs: Any) -> None:
+        kwargs["exc_info"] = True
+        self._emit(logging.ERROR, msg, **kwargs)
