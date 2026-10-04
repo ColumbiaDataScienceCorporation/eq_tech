@@ -1,0 +1,37 @@
+# Base oauth2-proxy Helm values shared across all environments.
+# Deploy using per-env override files (oauth2-proxy-values-dev.yaml etc.)
+# helm upgrade --install oauth2-proxy oauth2-proxy/oauth2-proxy \
+#   --namespace <env>-auth --create-namespace \
+#   --values k8s/auth/oauth2-proxy-values-base.yaml \
+#   --values k8s/auth/oauth2-proxy-values-<env>.yaml
+
+config:
+  existingSecret: oauth2-proxy
+
+extraArgs:
+  provider: oidc
+  oidc-issuer-url: "https://login.microsoftonline.com/e5e33b11-e89c-466a-bf06-e94151676845/v2.0"
+  scope: "openid profile email"
+  email-domain: "*"
+  pass-user-headers: "true"
+  pass-access-token: "true"
+  set-xauthrequest: "true"
+  # Forward Entra groups claim as X-Auth-Request-Groups header
+  oidc-groups-claim: "groups"
+  upstream: "file:///dev/null"
+
+image:
+  repository: quay.io/oauth2-proxy/oauth2-proxy
+  tag: v7.15.3
+
+service:
+  type: ClusterIP
+  port: 4180
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+  limits:
+    cpu: "200m"
+    memory: "128Mi"

@@ -1,0 +1,18 @@
+extraArgs:
+  redirect-url: "https://eq-tech.52.185.94.105.nip.io/oauth2/callback"
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: eq-tech.52.185.94.105.nip.io
+      paths:
+        - path: /oauth2
+          pathType: Prefix
+  tls:
+    - secretName: prod-oauth2-proxy-tls
+      hosts:
+        - eq-tech.52.185.94.105.nip.io

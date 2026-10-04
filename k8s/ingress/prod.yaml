@@ -1,15 +1,20 @@
-# Replace 52.185.94.105 with the NGINX Ingress LoadBalancer external IP.
 # Apply with: kubectl apply -f k8s/ingress/prod.yaml -n prod-apps
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: eq-tech-ingress
   annotations:
-    nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:4180/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.prod-auth.svc.cluster.local:4180/oauth2/auth"
     nginx.ingress.kubernetes.io/auth-signin: "https://eq-tech.52.185.94.105.nip.io/oauth2/start?rd=$escaped_request_uri"
     nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - eq-tech.52.185.94.105.nip.io
+      secretName: prod-eq-tech-tls
   rules:
     - host: "eq-tech.52.185.94.105.nip.io"
       http:
