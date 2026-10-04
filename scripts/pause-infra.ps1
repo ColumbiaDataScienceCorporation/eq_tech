@@ -35,6 +35,23 @@ if ([int]$nodeCount -eq 0) {
     }
 }
 
+# Dev VM: deallocate (auto-shutdown and idle-cron also handle this automatically)
+$vmState = az vm show --resource-group $RG --name eq-tech-devbox `
+    --query powerState -o tsv 2>$null
+if ($null -eq $vmState -or $vmState -eq "") {
+    Write-Skip "Dev VM not provisioned"
+} elseif ($vmState -eq "VM deallocated") {
+    Write-Skip "Dev VM already deallocated"
+} else {
+    Write-Step "Deallocating dev VM (state: $vmState)"
+    if (-not $DryRun) {
+        az vm deallocate --resource-group $RG --name eq-tech-devbox
+        Write-Ok "Dev VM deallocated"
+    } else {
+        Write-Skip "DryRun: would deallocate dev VM"
+    }
+}
+
 # PostgreSQL: stop server (still billed for storage at ~$3.68/month)
 $pgState = az postgres flexible-server show --resource-group $RG --name eq-tech-pg `
     --query state -o tsv

@@ -22,9 +22,24 @@ Flask/Dash usage:
     app.server.before_request(auth.before_request)
 """
 
-from fastapi import Depends, HTTPException, Request
-from flask import abort
-from flask import request as flask_request
+from __future__ import annotations
+
+# Both framework imports are optional: API containers ship FastAPI only,
+# Dash containers ship Flask only. Import errors are deferred to call sites.
+try:
+    from fastapi import Depends, HTTPException, Request
+    _HAS_FASTAPI = True
+except ImportError:
+    Depends = HTTPException = Request = None  # type: ignore[assignment,misc]
+    _HAS_FASTAPI = False
+
+try:
+    from flask import abort
+    from flask import request as flask_request
+    _HAS_FLASK = True
+except ImportError:
+    abort = flask_request = None  # type: ignore[assignment]
+    _HAS_FLASK = False
 
 
 def parse_groups(header_value: str) -> list[str]:

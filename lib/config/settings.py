@@ -79,7 +79,10 @@ class Settings(BaseSettings):
 
     @field_validator("environment", mode="before")
     @classmethod
-    def normalise_env(cls, v: str) -> str:
+    def normalise_env(cls, v) -> str:
+        # Enum default arrives as an Enum instance; extract .value to avoid 'environment.dev'
+        if hasattr(v, "value"):
+            return v.value
         return str(v).lower()
 
     @model_validator(mode="after")

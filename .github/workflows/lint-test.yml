@@ -18,9 +18,11 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install dev dependencies
-        run: pip install ruff pytest pydantic-settings psycopg2-binary sqlalchemy
+        run: pip install -r requirements/dev.txt httpx
       - name: Lint
         run: ruff check .
-      - name: Unit tests
-        # tests/ placeholder exists but has no real tests yet
-        run: pytest tests/ -q --tb=short 2>/dev/null || echo "No tests directory found -- skipping"
+      - name: Unit and integration tests
+        env:
+          EQTECH_ENVIRONMENT: dev
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/apps/api:${{ github.workspace }}/apps/ui-dash
+        run: pytest tests/ -q --tb=short

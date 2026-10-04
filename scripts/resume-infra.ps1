@@ -21,7 +21,25 @@ function Write-Ok([string]$msg)   { Write-Host "    [+] $msg" -ForegroundColor G
 function Write-Skip([string]$msg) { Write-Host "    [-] $msg" -ForegroundColor DarkGray }
 function Write-Warn([string]$msg) { Write-Host "    [!] $msg" -ForegroundColor Yellow }
 
-# ── 1. Resume PostgreSQL ───────────────────────────────────────────────────────
+# ── 1. Resume dev VM ──────────────────────────────────────────────────────────
+Write-Step "Dev VM (eq-tech-devbox)"
+$vmState = az vm show --resource-group $RG --name eq-tech-devbox `
+    --query powerState -o tsv 2>$null
+if ($null -eq $vmState -or $vmState -eq "") {
+    Write-Skip "Dev VM not provisioned -- skip"
+} elseif ($vmState -eq "VM running") {
+    $devboxIP = az vm show --resource-group $RG --name eq-tech-devbox --show-details --query publicIps -o tsv 2>$null
+    Write-Ok "Dev VM already running ($devboxIP)"
+} else {
+    if ($DryRun) { Write-Skip "DryRun: would start dev VM"; }
+    else {
+        az vm start --resource-group $RG --name eq-tech-devbox
+        $devboxIP = az vm show --resource-group $RG --name eq-tech-devbox --show-details --query publicIps -o tsv 2>$null
+        Write-Ok "Dev VM started -- SSH: devadmin@$devboxIP"
+    }
+}
+
+# ── 2. Resume PostgreSQL ───────────────────────────────────────────────────────
 Write-Step "PostgreSQL"
 $pgState = az postgres flexible-server show --resource-group $RG --name $PG_SERVER `
     --query state -o tsv
