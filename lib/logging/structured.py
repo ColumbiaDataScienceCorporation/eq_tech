@@ -20,14 +20,11 @@ from typing import Any
 from lib.config.settings import get_settings
 
 # Fields that belong to LogRecord internals and should not be forwarded
-_SKIP_FIELDS = frozenset(
-    logging.LogRecord.__init__.__code__.co_varnames
-    | {
-        "msg", "args", "exc_info", "exc_text", "stack_info",
-        "created", "msecs", "relativeCreated", "thread", "threadName",
-        "processName", "process", "taskName",
-    }
-)
+_SKIP_FIELDS = frozenset(logging.LogRecord.__init__.__code__.co_varnames) | {
+    "msg", "args", "exc_info", "exc_text", "stack_info",
+    "created", "msecs", "relativeCreated", "thread", "threadName",
+    "processName", "process", "taskName",
+}
 
 
 class _JsonFormatter(logging.Formatter):
