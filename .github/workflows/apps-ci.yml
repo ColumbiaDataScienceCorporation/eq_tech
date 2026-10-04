@@ -7,6 +7,7 @@ on:
       - "apps/**"
       - "k8s/**"
       - "lib/**"
+      - ".github/workflows/apps-ci.yml"
   workflow_dispatch:
 
 permissions:
@@ -34,21 +35,25 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
       - name: Build & Push Docker Image to ACR
-        # :latest is ONLY pushed from main so prod deployments always get the production image
+        # AKS node is ARM64 (Standard_D4pls_v5 Ampere Altra); build both arches for portability
         run: |
           az acr login --name ${{ env.ACR_NAME }}
-          docker build \
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
             -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
             -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.ref_name }} \
             -f ${{ matrix.app.path }}/Dockerfile \
+            --push \
             .
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }}
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.ref_name }}
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            docker tag ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
-                       ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:latest
-            docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:latest
+            docker buildx imagetools create \
+              -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:latest \
+              ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }}
           fi
 
   deploy-dev:
@@ -60,9 +65,9 @@ jobs:
     strategy:
       matrix:
         app:
-          - { name: api,     image: api,     deployment: api,      container: api      }
-          - { name: ui-dash, image: ui-dash, deployment: dash-app, container: dash-app }
-          - { name: ui-web,  image: ui-web,  deployment: web-ui,   container: web-ui   }
+          - { name: api,     image: api,     deployment: api,      container: api,      manifest: api-deployment.yaml  }
+          - { name: ui-dash, image: ui-dash, deployment: dash-app, container: dash-app, manifest: dash-deployment.yaml }
+          - { name: ui-web,  image: ui-web,  deployment: web-ui,   container: web-ui,   manifest: web-deployment.yaml  }
     steps:
       - uses: actions/checkout@v4
       - uses: azure/login@v2
@@ -74,13 +79,11 @@ jobs:
       - name: Deploy to dev-apps
         run: |
           kubectl apply -f k8s/namespaces.yaml
-          kubectl apply -f k8s/apps/ -n dev-apps
+          kubectl apply -f k8s/apps/${{ matrix.app.manifest }} -n dev-apps
           kubectl apply -f k8s/ingress/dev.yaml -n dev-apps
-          if kubectl get deployment/${{ matrix.app.deployment }} -n dev-apps >/dev/null 2>&1; then
-            kubectl set image deployment/${{ matrix.app.deployment }} \
-              ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
-              -n dev-apps
-          fi
+          kubectl set image deployment/${{ matrix.app.deployment }} \
+            ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
+            -n dev-apps
 
   deploy-uat:
     name: Deploy - uat
@@ -91,9 +94,9 @@ jobs:
     strategy:
       matrix:
         app:
-          - { name: api,     image: api,     deployment: api,      container: api      }
-          - { name: ui-dash, image: ui-dash, deployment: dash-app, container: dash-app }
-          - { name: ui-web,  image: ui-web,  deployment: web-ui,   container: web-ui   }
+          - { name: api,     image: api,     deployment: api,      container: api,      manifest: api-deployment.yaml  }
+          - { name: ui-dash, image: ui-dash, deployment: dash-app, container: dash-app, manifest: dash-deployment.yaml }
+          - { name: ui-web,  image: ui-web,  deployment: web-ui,   container: web-ui,   manifest: web-deployment.yaml  }
     steps:
       - uses: actions/checkout@v4
       - uses: azure/login@v2
@@ -104,13 +107,11 @@ jobs:
       - run: az aks get-credentials --resource-group eq-tech-rg --name eq-tech-aks --overwrite-existing
       - name: Deploy to uat-apps
         run: |
-          kubectl apply -f k8s/apps/ -n uat-apps
+          kubectl apply -f k8s/apps/${{ matrix.app.manifest }} -n uat-apps
           kubectl apply -f k8s/ingress/uat.yaml -n uat-apps
-          if kubectl get deployment/${{ matrix.app.deployment }} -n uat-apps >/dev/null 2>&1; then
-            kubectl set image deployment/${{ matrix.app.deployment }} \
-              ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
-              -n uat-apps
-          fi
+          kubectl set image deployment/${{ matrix.app.deployment }} \
+            ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
+            -n uat-apps
 
   deploy-prod:
     name: Deploy - prod
@@ -121,9 +122,9 @@ jobs:
     strategy:
       matrix:
         app:
-          - { name: api,     image: api,     deployment: api,      container: api      }
-          - { name: ui-dash, image: ui-dash, deployment: dash-app, container: dash-app }
-          - { name: ui-web,  image: ui-web,  deployment: web-ui,   container: web-ui   }
+          - { name: api,     image: api,     deployment: api,      container: api,      manifest: api-deployment.yaml  }
+          - { name: ui-dash, image: ui-dash, deployment: dash-app, container: dash-app, manifest: dash-deployment.yaml }
+          - { name: ui-web,  image: ui-web,  deployment: web-ui,   container: web-ui,   manifest: web-deployment.yaml  }
     steps:
       - uses: actions/checkout@v4
       - uses: azure/login@v2
@@ -134,10 +135,8 @@ jobs:
       - run: az aks get-credentials --resource-group eq-tech-rg --name eq-tech-aks --overwrite-existing
       - name: Deploy to prod-apps
         run: |
-          kubectl apply -f k8s/apps/ -n prod-apps
+          kubectl apply -f k8s/apps/${{ matrix.app.manifest }} -n prod-apps
           kubectl apply -f k8s/ingress/prod.yaml -n prod-apps
-          if kubectl get deployment/${{ matrix.app.deployment }} -n prod-apps >/dev/null 2>&1; then
-            kubectl set image deployment/${{ matrix.app.deployment }} \
-              ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
-              -n prod-apps
-          fi
+          kubectl set image deployment/${{ matrix.app.deployment }} \
+            ${{ matrix.app.container }}=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.app.image }}:${{ github.sha }} \
+            -n prod-apps

@@ -18,9 +18,12 @@ app = FastAPI(title="EQ Tech API", version="1.0.0")
 
 @app.on_event("startup")
 def startup() -> None:
-    """Create DB tables on startup if they don't exist yet."""
-    init_db()
-    log.info("API started", environment=settings.environment.value)
+    """Create DB tables on startup; non-fatal if DB is unavailable at boot time."""
+    try:
+        init_db()
+    except Exception as exc:
+        log.warning(f"DB unavailable at startup, will retry on first request: {exc}")
+    log.info("API started")
 
 
 @app.get("/healthz")

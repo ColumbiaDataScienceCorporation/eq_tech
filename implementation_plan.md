@@ -1974,12 +1974,15 @@ jobs:
 az vm create \
   --resource-group eq-tech-rg \
   --name eq-tech-devbox \
-  --image Ubuntu2204 \
-  --size Standard_B2ms \
+  --image "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-arm64:latest" \
+  --size Standard_D2pls_v6 \
   --admin-username devadmin \
   --generate-ssh-keys \
   --public-ip-sku Standard \
   --assign-identity                  # system-assigned identity for OS disk auto-expand
+
+# Standard_B2ms not available in centralus (capacity restriction); Standard_D2pls_v6
+# (Azure Cobalt 100 ARM64, 2 vCPU / 4 GiB, ~$45/month) requires the ARM64 Ubuntu image.
 
 # Grant the VM identity Contributor on its own resource group so the
 # quota auto-scale script can call az disk update without stored credentials
@@ -2892,7 +2895,7 @@ kubectl get ingress -n dev-apps
 | Azure Key Vault | Standard tier | ~$1 |
 | **Current monthly total** | | **~$121/month** |
 
-Developer VM (`eq-tech-devbox`) and UAT/prod environments are not yet provisioned.
+Developer VM (`eq-tech-devbox`, Standard_D2pls_v6 ARM64, `20.80.99.213`) and UAT/prod environments are not yet provisioned.
 
 ---
 
@@ -2910,9 +2913,9 @@ All three environments use the same demo-grade sizing (matches `dev.tfvars`, `ua
 | --------------- | ------------------- | ------------ |
 | Azure Container Registry | Basic | ~$5 |
 | Azure Key Vault | Standard | ~$1 |
-| Developer VM (24/7) | Standard_B2ms (not yet provisioned) | ~$69 |
+| Developer VM (24/7) | Standard_D2pls_v6 ARM64 (not yet provisioned) | ~$45 |
 
-**Grand total when fully deployed:** **~$420/month** (~$351/month with dev VM stopped when idle)
+**Grand total when fully deployed:** **~$396/month** (~$351/month with dev VM stopped when idle)
 
 ---
 
