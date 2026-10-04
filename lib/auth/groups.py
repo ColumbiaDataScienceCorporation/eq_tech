@@ -24,8 +24,6 @@ Flask/Dash usage:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
-
 # Both framework imports are optional: API containers ship FastAPI only,
 # Dash containers ship Flask only. Import errors are deferred to call sites.
 try:
