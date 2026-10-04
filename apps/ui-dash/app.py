@@ -8,9 +8,9 @@ from lib.config.settings import get_settings
 app = dash.Dash(__name__, title="EQ Tech Analytics")
 settings = get_settings()
 
-# Enforce AD group membership before every non-exempt request
-auth = FlaskGroupAuth(settings.analysts_group_id, settings.admins_group_id)
-app.server.before_request(auth.before_request)
+if settings.require_group_auth:
+    auth = FlaskGroupAuth(settings.analysts_group_id, settings.admins_group_id)
+    app.server.before_request(auth.before_request)
 
 
 @app.server.route("/healthz")
