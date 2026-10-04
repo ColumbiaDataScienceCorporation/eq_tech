@@ -25,6 +25,12 @@ def test_logger_warning_with_kwargs():
     log.warning("something went wrong", error="details here")  # must not raise
 
 
+def test_logger_warning_with_positional_args():
+    from lib.logging.structured import get_logger
+    log = get_logger("test.posargs")
+    log.warning("something went wrong: %s", "details here")  # must not raise
+
+
 def test_logger_error_with_exc_info():
     from lib.logging.structured import get_logger
     log = get_logger("test.exc")
