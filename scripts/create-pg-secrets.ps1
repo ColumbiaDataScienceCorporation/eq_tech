@@ -24,22 +24,15 @@ $ErrorActionPreference = "Stop"
 # ── Resolve the PostgreSQL password ─────────────────────────────────────────
 if (-not $PgPassword) {
     Write-Host "Reading password from Key Vault '$KeyVaultName' / secret '$KvSecretName'..."
-    try {
-        $PgPassword = (az keyvault secret show `
-            --vault-name $KeyVaultName `
-            --name $KvSecretName `
-            --query "value" -o tsv 2>$null)
-    } catch {}
+    $kvArgs = @("keyvault","secret","show","--vault-name",$KeyVaultName,"--name",$KvSecretName,"--query","value","-o","tsv")
+    try { $PgPassword = (az @kvArgs 2>$null) } catch {}
 
     if (-not $PgPassword) {
-        # Fall back to local .env file (PG_ADMIN_PASSWORD)
-        Write-Host "  Key Vault not reachable — falling back to .env file"
+        Write-Host "  Key Vault not reachable -- falling back to .env file"
         $envFile = Join-Path $PSScriptRoot "..\\.env"
         if (Test-Path $envFile) {
-            $PgPassword = (Get-Content $envFile |
-                Where-Object { $_ -match "^PG_ADMIN_PASSWORD=" } |
-                ForEach-Object { ($_ -split "=", 2)[1] } |
-                Select-Object -First 1)
+            $line = Get-Content $envFile | Where-Object { $_ -match "^PG_ADMIN_PASSWORD=" } | Select-Object -First 1
+            if ($line) { $PgPassword = ($line -split "=", 2)[1] }
         }
     }
 
