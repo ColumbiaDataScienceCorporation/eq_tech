@@ -1,23 +1,62 @@
 # Replacing Port-Forwarding with LB Ingress + TLS + OAuth2 Proxy
 
-## Current State
+## Deployment Status (as of 2026-10-04)
 
-Port-forwarding (`kubectl port-forward`) is used for local access because three gaps prevent
-the LoadBalancer ingress from working end-to-end:
+| Item | Status | Notes |
+|------|--------|-------|
+| Azure LB health probe | ✅ Fixed | Probe path changed to `/healthz`; LB now routes external traffic |
+| cert-manager | ✅ Deployed | `letsencrypt-prod` ClusterIssuer in place |
+| TLS certificates | ✅ All 6 issued | `dev/uat/prod-apps` + `dev/uat/prod-auth` certs `Ready: True` |
+| Per-env oauth2-proxy | ✅ Running | `dev-auth`, `uat-auth`, `prod-auth` each `1/1 Running` |
+| App ingresses (dev/uat/prod) | ✅ Applied | TLS + auth-url + ssl-redirect configured |
+| Airflow ingresses | ✅ Patched | Per-env auth-url annotations applied directly |
+| HTTPS access via LB | ✅ Working | `https://dev.eq-tech.52.185.94.105.nip.io/` → 302 to oauth2 login |
+| Entra groups claim | ❌ Pending | Manual step — Azure Portal required (see Step 3) |
+| Entra redirect URIs | ❌ Pending | Manual step — Azure Portal required (see Step 3) |
+| Dash group auth | ❌ Bypassed | `EQTECH_REQUIRE_GROUP_AUTH=false` until groups flow; remove after Step 3 |
 
-| Gap | Detail |
-|-----|--------|
-| **No TLS** | Ingress only serves HTTP (port 80). OAuth2 proxy's `--redirect-url` and all `auth-signin` annotations use `https://`, so the login callback fails. |
-| **Groups claim missing** | OAuth2 proxy is started with `--scope=openid profile email` — no `groups` scope. Entra ID does not emit group memberships, so `X-Auth-Request-Groups` is always empty and `FlaskGroupAuth` 403s every request. |
-| **Single redirect URL** | One oauth2-proxy pod is deployed in the `auth` namespace with `--redirect-url` hardcoded to the dev nip.io domain. UAT and prod share the same proxy but their callback URLs are not registered. |
+### Remaining manual steps (Azure Portal)
 
-After completing this plan, all three environments will be accessible via the browser at:
+1. **Entra app registration** `d5679b41-4dec-42e2-a2bc-7a884b6da06a`:
+   - **Token configuration → Add groups claim** → Security groups → tick ID → Save
+   - **Authentication → Add Redirect URIs**:
+     ```
+     https://dev.eq-tech.52.185.94.105.nip.io/oauth2/callback
+     https://uat.eq-tech.52.185.94.105.nip.io/oauth2/callback
+     https://eq-tech.52.185.94.105.nip.io/oauth2/callback
+     ```
+2. **Remove Dash group auth bypass** (run after step 1 is done):
+   ```powershell
+   # Remove EQTECH_REQUIRE_GROUP_AUTH=false from k8s/apps/dash-deployment.yaml, then:
+   foreach ($ns in @("dev-apps","uat-apps","prod-apps")) {
+     kubectl apply -f k8s/apps/dash-deployment.yaml -n $ns
+     kubectl rollout restart deployment/dash-app -n $ns
+   }
+   ```
 
-| Env | URL |
-|-----|-----|
-| dev | `https://dev.eq-tech.52.185.94.105.nip.io` |
-| UAT | `https://uat.eq-tech.52.185.94.105.nip.io` |
-| prod | `https://eq-tech.52.185.94.105.nip.io` |
+---
+
+## Background: What Was Blocking External LB Access
+
+The Azure Load Balancer health probe used `RequestPath: /` on NodePort 31726.
+NGINX ingress returns **HTTP 404** for any request where the `Host` header doesn't
+match a configured ingress rule (probe sends the node's internal IP as Host).
+Azure LB considers anything outside 2xx/3xx as **unhealthy** and stops routing ALL
+external traffic. **The backend was unhealthy since the cluster was first deployed.**
+
+Fix applied:
+```powershell
+$aksRg = az aks show -g eq-tech-rg -n eq-tech-aks --query nodeResourceGroup -o tsv
+az network lb probe update -g $aksRg --lb-name kubernetes `
+  --name "a841e94387bed4a6cbe7d8b171ae4ccc-TCP-80"  --path "/healthz"
+az network lb probe update -g $aksRg --lb-name kubernetes `
+  --name "a841e94387bed4a6cbe7d8b171ae4ccc-TCP-443" --path "/healthz"
+kubectl annotate svc ingress-nginx-controller -n ingress-nginx `
+  "service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path=/healthz" --overwrite
+```
+
+For future cluster deployments this is now baked into `scripts/provision-dev.ps1` via the
+`controller.service.annotations` Helm set flag.
 
 ---
 
@@ -339,15 +378,17 @@ the dash deployment is the only toggle that needs reverting.
 
 ## Summary Checklist
 
-- [ ] cert-manager installed and `letsencrypt-prod` ClusterIssuer created
-- [ ] TLS section added to `k8s/ingress/dev.yaml`, `uat.yaml`, `prod.yaml` and Airflow ingresses
-- [ ] Certificates issued (`kubectl get certificate -A`)
-- [ ] Entra app registration: groups claim added to ID token
-- [ ] Entra app registration: all three callback URLs added to Redirect URIs
-- [ ] oauth2-proxy deployed per environment (`dev-auth`, `uat-auth`, `prod-auth`) with `--oidc-groups-claim=groups`
-- [ ] Old single oauth2-proxy in `auth` namespace removed
-- [ ] Ingress `auth-url` / `auth-signin` updated to per-env proxies and applied
-- [ ] `EQTECH_REQUIRE_GROUP_AUTH=false` env var removed from dash deployments
+- [x] Azure LB health probe fixed (`/healthz`) — **was root cause of all external access failures**
+- [x] cert-manager installed and `letsencrypt-prod` ClusterIssuer created
+- [x] TLS section added to `k8s/ingress/dev.yaml`, `uat.yaml`, `prod.yaml` and Airflow ingresses
+- [x] Certificates issued (`kubectl get certificate -A` — all `Ready: True`)
+- [x] oauth2-proxy deployed per environment (`dev-auth`, `uat-auth`, `prod-auth`) with `--oidc-groups-claim=groups`
+- [x] Old single oauth2-proxy in `auth` namespace removed
+- [x] Ingress `auth-url` / `auth-signin` updated to per-env proxies and applied
+- [x] HTTPS reachable from internet (`https://dev.eq-tech.52.185.94.105.nip.io/` → oauth2 login)
+- [ ] **Entra app registration: groups claim added to ID token** ← do this next
+- [ ] **Entra app registration: all three callback URLs added to Redirect URIs** ← do this next
+- [ ] `EQTECH_REQUIRE_GROUP_AUTH=false` env var removed from dash deployments (do after above)
 - [ ] Login test: browser reaches Entra login page, redirects back, Dash loads without 403
 - [ ] `/api/v1/me` returns non-empty `groups` array
 
