@@ -22,10 +22,6 @@ spec:
                 name: eq-tech-groups
             - secretRef:
                 name: eq-tech-secrets
-          # Bypass Entra group check for direct port-forward access; remove when LB+oauth2 is working
-          env:
-            - name: EQTECH_REQUIRE_GROUP_AUTH
-              value: "false"
           livenessProbe:
             httpGet:
               path: /healthz
