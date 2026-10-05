@@ -16,9 +16,18 @@ config:
     base_url: "https://uat.eq-tech.52.185.94.105.nip.io/airflow"
 ingress:
   web:
+    annotations:
+      nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.uat-auth.svc.cluster.local:4180/oauth2/auth"
+      nginx.ingress.kubernetes.io/auth-signin: "https://uat.eq-tech.52.185.94.105.nip.io/oauth2/start?rd=$escaped_request_uri"
+      nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
     hosts:
       - name: "uat.eq-tech.52.185.94.105.nip.io"
     path: "/airflow"
+    tls:
+      enabled: true
+      secretName: uat-airflow-tls
 
 dags:
   gitSync:

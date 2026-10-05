@@ -22,9 +22,6 @@ spec:
                 name: eq-tech-groups
             - secretRef:
                 name: eq-tech-secrets
-          env:
-            - name: EQTECH_REQUIRE_GROUP_AUTH
-              value: "false"
           livenessProbe:
             httpGet:
               path: /healthz
