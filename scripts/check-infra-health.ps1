@@ -30,16 +30,11 @@ function Tally { param($status)
 
 function Test-Endpoint {
     param([string]$url, [int]$timeout = 8)
-    try {
-        $r = Invoke-WebRequest -Uri $url -TimeoutSec $timeout -SkipCertificateCheck `
-             -MaximumRedirection 0 -ErrorAction Stop
-        return @{ code = $r.StatusCode; ok = $true }
-    } catch {
-        $code = $_.Exception.Response.StatusCode.value__
-        if ($code -and $code -lt 500) { return @{ code = $code; ok = $true } }
-        $errCode = if ($code) { $code } else { "ERR" }
-        return @{ code = $errCode; ok = $false }
+    $code = curl.exe -sk --max-time $timeout -o NUL -w "%{http_code}" $url 2>$null
+    if ($code -match '^\d+$' -and [int]$code -gt 0) {
+        return @{ code = [int]$code; ok = $true }
     }
+    return @{ code = "ERR"; ok = $false }
 }
 
 Write-Host ""
@@ -101,7 +96,7 @@ else {
     Write-Host ""
     Write-Host ("  {0,-20} {1,-44} {2,-7} {3}" -f "NAMESPACE","POD","READY","STATUS") -ForegroundColor DarkGray
 
-    $watchNS = @("dev-airflow","uat-airflow","prod-airflow","auth","dev-apps","uat-apps","prod-apps","ingress-nginx")
+    $watchNS = @("dev-airflow","uat-airflow","prod-airflow","dev-auth","uat-auth","prod-auth","dev-apps","uat-apps","prod-apps","ingress-nginx","cert-manager")
 
     foreach ($line in $podLines) {
         $parts = $line -split '\s+', 6
@@ -166,15 +161,11 @@ $summaryColor = if ($script:fail -gt 0) { "Red" } elseif ($script:warn -gt 0) { 
 Write-Host ("  SUMMARY  OK: {0}  WARN: {1}  FAIL: {2}  (of {3} checks)" -f $script:ok, $script:warn, $script:fail, $total) -ForegroundColor $summaryColor
 if ($LB_IP) {
     Write-Host ""
-    Write-Host "  QUICK LINKS (nip.io access via port-forward if external TCP is blocked)" -ForegroundColor Cyan
-    Write-Host "  Dev Airflow:  https://dev.eq-tech.$LB_IP.nip.io/airflow"
-    Write-Host "                kubectl port-forward svc/airflow-dev-webserver 8081:8080 -n dev-airflow"
-    Write-Host "  UAT Airflow:  https://uat.eq-tech.$LB_IP.nip.io/airflow"
-    Write-Host "                kubectl port-forward svc/airflow-uat-webserver 8082:8080 -n uat-airflow"
-    Write-Host "  Prod Airflow: https://eq-tech.$LB_IP.nip.io/airflow"
-    Write-Host "                kubectl port-forward svc/airflow-prod-webserver 8083:8080 -n prod-airflow"
-    Write-Host "  Dev API:      https://dev.eq-tech.$LB_IP.nip.io/api/healthz"
-    Write-Host "                kubectl port-forward svc/api 8084:8000 -n dev-apps"
+    Write-Host "  URLS" -ForegroundColor Cyan
+    Write-Host "  Dev:  https://dev.eq-tech.$LB_IP.nip.io"
+    Write-Host "  UAT:  https://uat.eq-tech.$LB_IP.nip.io"
+    Write-Host "  Prod: https://eq-tech.$LB_IP.nip.io"
+    Write-Host "  (Login with your Entra ID credentials)"
 }
 Write-Host ("=" * 72)
 Write-Host ""
