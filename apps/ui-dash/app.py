@@ -5,7 +5,8 @@ from dash import dcc, html
 from lib.auth.groups import FlaskGroupAuth
 from lib.config.settings import get_settings
 
-app = dash.Dash(__name__, title="EQ Tech Analytics")
+# url_base_pathname must match the ingress /dash prefix so /_dash-* routes stay under /dash/
+app = dash.Dash(__name__, title="EQ Tech Analytics", url_base_pathname="/dash/")
 settings = get_settings()
 
 if settings.require_group_auth:
