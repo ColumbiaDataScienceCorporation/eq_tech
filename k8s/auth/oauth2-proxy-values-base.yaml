@@ -10,7 +10,9 @@ config:
 
 extraArgs:
   provider: oidc
+  # Tenant-specific endpoint ensures hotmail account authenticates as a tenant member (gets group claims)
   oidc-issuer-url: "https://login.microsoftonline.com/e5e33b11-e89c-466a-bf06-e94151676845/v2.0"
+  insecure-oidc-skip-issuer-verification: "true"
   scope: "openid profile email"
   email-domain: "*"
   pass-user-headers: "true"

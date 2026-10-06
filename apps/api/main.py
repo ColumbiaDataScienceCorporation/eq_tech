@@ -13,7 +13,7 @@ from lib.portfolio.metrics import summarise_positions
 log = get_logger(__name__)
 settings = get_settings()
 
-app = FastAPI(title="EQ Tech API", version="1.0.0")
+app = FastAPI(title="EQ Tech API", version="1.0.0", root_path="/api")
 
 
 @app.on_event("startup")
