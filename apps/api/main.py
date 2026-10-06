@@ -32,7 +32,7 @@ def health_check():
     return {"status": "healthy", "db": "ok" if pg_health() else "unreachable"}
 
 
-@app.get("/api/v1/me")
+@app.get("/v1/me")
 def whoami(request: Request):
     """Returns the authenticated user's identity and group memberships."""
     return {
@@ -42,7 +42,7 @@ def whoami(request: Request):
     }
 
 
-@app.get("/api/v1/portfolio")
+@app.get("/v1/portfolio")
 def get_portfolio(
     request: Request,
     portfolio_id: str = "P001",
