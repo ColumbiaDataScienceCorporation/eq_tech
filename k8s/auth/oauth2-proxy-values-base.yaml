@@ -22,8 +22,6 @@ extraArgs:
   # Forward Entra groups claim as X-Auth-Request-Groups header
   oidc-groups-claim: "groups"
   upstream: "file:///dev/null"
-  # Skip auth for favicon to prevent race-condition 500s when browser fetches it in parallel
-  skip-auth-route: "^/favicon\\.ico$"
 
 service:
   type: ClusterIP

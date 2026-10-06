@@ -1,0 +1,16 @@
+# ingress-nginx Helm values for EQ Tech.
+# Apply with:
+#   helm upgrade ingress-nginx ingress-nginx/ingress-nginx \
+#     --namespace ingress-nginx --reuse-values \
+#     --values infra/helm/ingress-nginx-values.yaml
+
+controller:
+  # Required for allow-snippet-annotations and server-snippet to work
+  allowSnippetAnnotations: true
+
+  config:
+    # Allow snippet annotations on ingress objects
+    allow-snippet-annotations: "true"
+    # Serve /favicon.ico without auth on all virtual hosts to prevent the
+    # parallel-callback 500 race condition during the OAuth2 login flow.
+    server-snippet: "location = /favicon.ico { access_log off; return 204; }"
