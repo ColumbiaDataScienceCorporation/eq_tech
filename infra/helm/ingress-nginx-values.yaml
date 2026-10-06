@@ -13,4 +13,6 @@ controller:
     allow-snippet-annotations: "true"
     # Serve /favicon.ico without auth on all virtual hosts to prevent the
     # parallel-callback 500 race condition during the OAuth2 login flow.
-    server-snippet: "location = /favicon.ico { access_log off; return 204; }"
+    server-snippet: "location = /favicon.ico { access_log off; return 204; }"    # MSA access tokens are large; increase proxy buffer to prevent 502 on callback
+    proxy-buffer-size: "16k"
+    proxy-buffers-number: "4"
