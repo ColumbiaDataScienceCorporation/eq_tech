@@ -143,12 +143,11 @@ gitGraph
    commit id: "add DAG logic"
    commit id: "add tests"
    checkout develop
-   merge feature-new-dag id: "merge feature"
+   merge feature-work id: "merge to develop"
    commit id: "deploy to DEV"
    branch uat
    checkout uat
-   merge develop id: "promote to UAT"
-   commit id: "deploy to UAT"
+   commit id: "promote to UAT"
    checkout main
    merge uat id: "promote to PROD"
    commit id: "deploy to PROD"
