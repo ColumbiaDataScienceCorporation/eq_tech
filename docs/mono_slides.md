@@ -58,61 +58,40 @@
 
 ```mermaid
 graph TB
-    subgraph Internet
-        Browser[Browser / API Client]
-        GitHub[GitHub Enterprise]
-        LE[Let's Encrypt ACME]
+    Browser[Browser / API Client]
+    GitHub[GitHub Enterprise]
+    LE[Let's Encrypt ACME]
+
+    subgraph Ingress["Ingress Layer (AKS)"]
+        NGINX[NGINX LB: 52.185.94.105]
+        CM[cert-manager]
+        PROXY[oauth2-proxy dev/uat/prod]
     end
 
-    subgraph Azure["Azure (centralus)"]
-        subgraph AKS["AKS Cluster — eq-tech-aks"]
-            subgraph ingress["Ingress Layer"]
-                NGINX[NGINX Ingress Controller<br/>LB: 52.185.94.105]
-                PROXY_DEV[oauth2-proxy dev-auth]
-                PROXY_UAT[oauth2-proxy uat-auth]
-                PROXY_PROD[oauth2-proxy prod-auth]
-                CM[cert-manager<br/>Let's Encrypt TLS]
-            end
-            subgraph dev["dev namespace"]
-                AIRFLOW_DEV[Airflow dev<br/>scheduler · webserver · triggerer]
-                API_DEV[FastAPI dev]
-                DASH_DEV[Dash dev]
-                WEB_DEV[Web UI dev]
-            end
-            subgraph uat["uat namespace"]
-                AIRFLOW_UAT[Airflow uat]
-                API_UAT[FastAPI uat]
-                DASH_UAT[Dash uat]
-                WEB_UAT[Web UI uat]
-            end
-            subgraph prod["prod namespace"]
-                AIRFLOW_PROD[Airflow prod]
-                API_PROD[FastAPI prod]
-                DASH_PROD[Dash prod]
-                WEB_PROD[Web UI prod]
-            end
-        end
+    subgraph Namespaces["App Namespaces (dev / uat / prod)"]
+        AIRFLOW[Airflow scheduler+webserver+triggerer]
+        API[FastAPI]
+        DASH[Dash]
+        WEB[Web UI]
+    end
 
-        ACR[Azure Container Registry<br/>eqtechacr]
-        PG[PostgreSQL Flexible Server<br/>airflow_dev · airflow_uat · airflow_prod]
-        KV[Azure Key Vault<br/>eq-tech-kv]
-        ENTRA[Entra ID<br/>SSO + Group RBAC]
-        DEVVM[Dev Server<br/>eq-tech-devbox]
+    subgraph AzureServices["Azure Services"]
+        ACR[Container Registry]
+        PG[PostgreSQL]
+        KV[Key Vault]
+        ENTRA[Entra ID]
+        DEVVM[Dev Server]
     end
 
     Browser -->|HTTPS| NGINX
-    NGINX --> PROXY_DEV & PROXY_UAT & PROXY_PROD
-    PROXY_DEV & PROXY_UAT & PROXY_PROD -->|Entra OIDC| ENTRA
-    NGINX --> API_DEV & API_UAT & API_PROD
-    NGINX --> DASH_DEV & DASH_UAT & DASH_PROD
-    NGINX --> AIRFLOW_DEV & AIRFLOW_UAT & AIRFLOW_PROD
-    CM -->|HTTP-01 challenge| LE
-    GitHub -->|OIDC push images| ACR
-    ACR --> AKS
-    API_DEV & API_UAT & API_PROD --> PG
-    AIRFLOW_DEV & AIRFLOW_UAT & AIRFLOW_PROD --> PG
-    KV -.->|secrets| AKS
-    DEVVM -.->|kubectl · airflow dev| AKS
+    NGINX --> PROXY -->|OIDC| ENTRA
+    NGINX --> AIRFLOW & API & DASH & WEB
+    CM -->|HTTP-01| LE
+    GitHub -->|OIDC push| ACR
+    ACR --> Namespaces
+    API & AIRFLOW --> PG
+    KV -.->|secrets| Namespaces
+    DEVVM -.->|kubectl| Namespaces
 ```
 
 ---
