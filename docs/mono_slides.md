@@ -113,13 +113,13 @@ graph TB
 
 **Shared Libraries — `lib/`**
 
-| Module | Purpose | Used by |
-|--------|---------|---------|
-| `lib/config` | Environment-aware settings · Postgres URL · Key Vault URL · Entra group IDs | API · Dash · DAGs |
-| `lib/auth` | Entra group RBAC · Flask and FastAPI auth helpers · header parsing | API · Dash |
-| `lib/db` | SQLAlchemy sessions · ORM models · database health check | API · DAGs |
-| `lib/logging` | Structured JSON logger with consistent format across services | API · Dash · DAGs |
-| `lib/portfolio` | Example business logic layer (P&L, position analytics — replace with real models) | API |
+| Module            | Purpose                                                                            | Used by             |
+| ----------------- | ---------------------------------------------------------------------------------- | ------------------- |
+| `lib/config`    | Environment-aware settings · Postgres URL · Key Vault URL · Entra group IDs     | API · Dash · DAGs |
+| `lib/auth`      | Entra group RBAC · Flask and FastAPI auth helpers · header parsing               | API · Dash         |
+| `lib/db`        | SQLAlchemy sessions · ORM models · database health check                         | API · DAGs         |
+| `lib/logging`   | Structured JSON logger with consistent format across services                      | API · Dash · DAGs |
+| `lib/portfolio` | Example business logic layer (P&L, position analytics — replace with real models) | API                 |
 
 **Key benefits**
 
@@ -135,15 +135,11 @@ graph TB
 
 ```mermaid
 gitGraph
-   commit id: "initial"
+   commit id: "initial release"
    branch develop
    checkout develop
-   branch feature-new-dag
-   checkout feature-new-dag
-   commit id: "add DAG logic"
-   commit id: "add tests"
-   checkout develop
-   merge feature-work id: "merge to develop"
+   commit id: "feature work"
+   commit id: "tests pass"
    commit id: "deploy to DEV"
    branch uat
    checkout uat
