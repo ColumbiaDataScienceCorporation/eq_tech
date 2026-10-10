@@ -57,36 +57,15 @@
 ## Slide 3 — Architecture Overview (Infrastructure Perspective)
 
 ```mermaid
-graph TB
-    Browser[Browser / API Client]
+flowchart TD
+    Internet["Browser / API Client\nGitHub Enterprise · Let's Encrypt"]
+    Ingress["Ingress Layer\nNGINX LB 52.185.94.105\noauth2-proxy · cert-manager"]
+    Apps["AKS App Namespaces: dev / uat / prod\nAirflow · FastAPI · Dash · Web UI"]
+    Azure["Azure Services\nContainer Registry · PostgreSQL\nKey Vault · Entra ID"]
 
-    subgraph Ingress["Ingress Layer"]
-        NGINX[NGINX LB 52.185.94.105]
-        PROXY[oauth2-proxy]
-        CM[cert-manager]
-    end
-
-    subgraph Apps["App Namespaces - dev / uat / prod"]
-        AIRFLOW[Airflow]
-        API[FastAPI]
-        DASH[Dash]
-        WEB[Web UI]
-    end
-
-    subgraph Azure["Azure Services"]
-        ACR[Container Registry]
-        PG[PostgreSQL]
-        KV[Key Vault]
-        ENTRA[Entra ID]
-    end
-
-    Browser --> NGINX
-    NGINX --> PROXY --> ENTRA
-    NGINX --> AIRFLOW & API & DASH & WEB
-    CM -->|TLS| NGINX
-    ACR -->|images| Apps
-    API & AIRFLOW --> PG
-    KV -.->|secrets| Apps
+    Internet -->|HTTPS| Ingress
+    Ingress -->|Entra SSO + routes| Apps
+    Apps -->|data + secrets| Azure
 ```
 
 ---
