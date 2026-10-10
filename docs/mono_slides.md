@@ -138,12 +138,12 @@ gitGraph
    commit id: "initial"
    branch develop
    checkout develop
-   branch feature/new-dag
-   checkout feature/new-dag
+   branch feature-new-dag
+   checkout feature-new-dag
    commit id: "add DAG logic"
    commit id: "add tests"
    checkout develop
-   merge feature/new-dag id: "merge feature"
+   merge feature-new-dag id: "merge feature"
    commit id: "deploy to DEV"
    branch uat
    checkout uat
