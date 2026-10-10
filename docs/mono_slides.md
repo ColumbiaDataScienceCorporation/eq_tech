@@ -119,7 +119,7 @@ graph TB
 | `lib/auth/groups.py` | `FlaskGroupAuth` · `require_groups()` · `X-Auth-Request-Groups` parsing | API · Dash |
 | `lib/db/` | SQLAlchemy sessions · `PortfolioPosition` model · `health_check()` | API · DAGs |
 | `lib/logging/structured.py` | Structured JSON logger · `*args/**kwargs` support | API · Dash · DAGs |
-| `lib/portfolio/metrics.py` | `summarise_positions()` · P&L · market value · weights | API |
+| `lib/portfolio/metrics.py` | Example business logic · `summarise_positions()` · P&L · market value · weights | API |
 
 **Key benefits**
 
