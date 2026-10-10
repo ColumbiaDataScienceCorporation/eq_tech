@@ -60,12 +60,12 @@
 graph TB
     Browser[Browser / API Client]
     GitHub[GitHub Enterprise]
-    LE[Let's Encrypt ACME]
 
     subgraph Ingress["Ingress Layer (AKS)"]
         NGINX[NGINX LB: 52.185.94.105]
         CM[cert-manager]
         PROXY[oauth2-proxy dev/uat/prod]
+        LE[Let's Encrypt]
     end
 
     subgraph Namespaces["App Namespaces — dev / uat / prod"]
@@ -88,7 +88,6 @@ graph TB
     NGINX --> AIRFLOW & API & DASH & WEB
     CM -->|HTTP-01| LE
     GitHub -->|OIDC push| ACR
-    ACR --> Namespaces
     API & AIRFLOW --> PG
     KV -.->|secrets| Namespaces
     DEVVM -.->|kubectl| Namespaces
