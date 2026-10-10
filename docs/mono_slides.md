@@ -1,4 +1,4 @@
-# EQ Tech Platform: Modern Financial Engineering on Azure AKS
+# Modern Financial Engineering on Azure AKS
 ## A Mono-Repo, AI-Ready, Cloud-Native Architecture
 
 ---
