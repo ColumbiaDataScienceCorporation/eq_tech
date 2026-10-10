@@ -58,14 +58,17 @@
 
 ```mermaid
 flowchart TD
-    Internet["Browser / API Client\nGitHub Enterprise · Let's Encrypt"]
-    Ingress["Ingress Layer\nNGINX LB 52.185.94.105\noauth2-proxy · cert-manager"]
-    Apps["AKS App Namespaces: dev / uat / prod\nAirflow · FastAPI · Dash · Web UI"]
-    Azure["Azure Services\nContainer Registry · PostgreSQL\nKey Vault · Entra ID"]
+    Internet["Internet\nBrowser / API Client\nGitHub Enterprise\nLet's Encrypt ACME"]
 
-    Internet -->|HTTPS| Ingress
-    Ingress -->|Entra SSO + routes| Apps
-    Apps -->|data + secrets| Azure
+    Ingress["Ingress Layer — AKS\nNGINX Ingress LB: 52.185.94.105\noauth2-proxy: dev-auth / uat-auth / prod-auth\ncert-manager: auto-renew Let's Encrypt TLS"]
+
+    Apps["AKS App Namespaces: dev / uat / prod\nAirflow: scheduler + webserver + triggerer\nFastAPI: REST API + Swagger docs\nDash: Plotly Analytics Dashboard\nWeb UI: Static portal"]
+
+    Azure["Azure Services\nContainer Registry: Docker images per branch\nPostgreSQL Flexible Server: airflow_dev/uat/prod\nKey Vault: secrets + credentials\nEntra ID: SSO + Group RBAC\nDev Server: kubectl + scripts"]
+
+    Internet -->|"HTTPS · OIDC push"| Ingress
+    Ingress -->|"auth check + routing"| Apps
+    Apps -->|"data · secrets · images"| Azure
 ```
 
 ---
