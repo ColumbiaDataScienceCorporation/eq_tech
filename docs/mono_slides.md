@@ -177,7 +177,7 @@ graph TB
 
 ---
 
-## Slide 5 — Shared Library Architecture
+## Slide 6 — Shared Library Architecture
 
 ```mermaid
 graph TD
