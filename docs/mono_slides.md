@@ -57,18 +57,41 @@
 ## Slide 3 — Architecture Overview (Infrastructure Perspective)
 
 ```mermaid
-flowchart TD
-    Internet["Internet\nBrowser / API Client\nGitHub Enterprise\nLet's Encrypt ACME"]
+graph TB
+    Browser[Browser / API Client]
+    GitHub[GitHub Enterprise]
+    LE[Let's Encrypt ACME]
 
-    Ingress["Ingress Layer — AKS\nNGINX Ingress LB: 52.185.94.105\noauth2-proxy: dev-auth / uat-auth / prod-auth\ncert-manager: auto-renew Let's Encrypt TLS"]
+    subgraph Ingress["Ingress Layer (AKS)"]
+        NGINX[NGINX LB: 52.185.94.105]
+        CM[cert-manager]
+        PROXY[oauth2-proxy dev/uat/prod]
+    end
 
-    Apps["AKS App Namespaces: dev / uat / prod\nAirflow: scheduler + webserver + triggerer\nFastAPI: REST API + Swagger docs\nDash: Plotly Analytics Dashboard\nWeb UI: Static portal"]
+    subgraph Namespaces["App Namespaces (dev / uat / prod)"]
+        AIRFLOW[Airflow scheduler+webserver+triggerer]
+        API[FastAPI]
+        DASH[Dash]
+        WEB[Web UI]
+    end
 
-    Azure["Azure Services\nContainer Registry: Docker images per branch\nPostgreSQL Flexible Server: airflow_dev/uat/prod\nKey Vault: secrets + credentials\nEntra ID: SSO + Group RBAC\nDev Server: kubectl + scripts"]
+    subgraph AzureServices["Azure Services"]
+        ACR[Container Registry]
+        PG[PostgreSQL]
+        KV[Key Vault]
+        ENTRA[Entra ID]
+        DEVVM[Dev Server]
+    end
 
-    Internet -->|"HTTPS · OIDC push"| Ingress
-    Ingress -->|"auth check + routing"| Apps
-    Apps -->|"data · secrets · images"| Azure
+    Browser -->|HTTPS| NGINX
+    NGINX --> PROXY -->|OIDC| ENTRA
+    NGINX --> AIRFLOW & API & DASH & WEB
+    CM -->|HTTP-01| LE
+    GitHub -->|OIDC push| ACR
+    ACR --> Namespaces
+    API & AIRFLOW --> PG
+    KV -.->|secrets| Namespaces
+    DEVVM -.->|kubectl| Namespaces
 ```
 
 ---
