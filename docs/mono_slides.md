@@ -95,42 +95,7 @@ graph TB
 
 ---
 
-## Slide 4 — Architecture Overview (App Developer Perspective)
-
-```mermaid
-graph TB
-    subgraph Repo["eq_tech mono-repo"]
-        LIB["lib/\nconfig · auth · db · logging · portfolio"]
-        APPS["apps/\napi · ui-dash · ui-web"]
-        DAGS["data/airflow/dags/\ndaily_etl_dag.py"]
-        K8S["k8s/ and infra/helm/"]
-        CI[".github/workflows/"]
-    end
-
-    subgraph Pipeline["CI/CD Pipeline"]
-        LINT["1. Lint + 22 Tests"]
-        BUILD["2. Multi-arch Docker Build\nlinux/amd64 + linux/arm64"]
-        DEPLOY["3. kubectl apply\nper-env namespace"]
-    end
-
-    subgraph Envs["Live Environments"]
-        DEV_ENV["dev environment"]
-        UAT_ENV["uat environment"]
-        PROD_ENV["prod environment"]
-    end
-
-    LIB -->|imported by| APPS
-    LIB -->|imported by| DAGS
-    CI -->|triggers| LINT
-    LINT --> BUILD --> DEPLOY
-    DEPLOY -->|develop branch| DEV_ENV
-    DEPLOY -->|uat branch| UAT_ENV
-    DEPLOY -->|main branch| PROD_ENV
-```
-
----
-
-## Slide 5 — Why Mono-Repo?
+## Slide 4 — Why Mono-Repo?
 
 **One repository contains everything the platform needs**
 
@@ -155,41 +120,7 @@ graph TB
 
 ---
 
-## Slide 6 — Shared Library Architecture
-
-```mermaid
-graph TD
-    subgraph lib["lib/ — shared by all apps and DAGs"]
-        CONFIG["lib/config/settings.py\nPydantic Settings · Entra IDs\nPostgres URL · Key Vault URL\nenv-aware (dev/uat/prod)"]
-        AUTH["lib/auth/groups.py\nFlaskGroupAuth · require_groups()\nX-Auth-Request-Groups parsing\nFastAPI dependency injection"]
-        DB["lib/db/\npostgres.py — SQLAlchemy sessions\nmodels.py — PortfolioPosition\nhealth_check()"]
-        LOG["lib/logging/structured.py\nStructuredLogger wrapper\n*args/**kwargs support\nJSON-compatible output"]
-        PORTFOLIO["lib/portfolio/metrics.py\nsummarise_positions()\nP&L · market value · weights"]
-    end
-
-    CONFIG --> AUTH
-    CONFIG --> DB
-    CONFIG --> LOG
-
-    subgraph apps["Applications"]
-        API["apps/api/main.py\nFastAPI"]
-        DASH["apps/ui-dash/app.py\nPlotly Dash"]
-        DAG["data/airflow/dags/\ndaily_etl_dag.py"]
-    end
-
-    CONFIG --> API & DASH & DAG
-    AUTH --> API & DASH
-    DB --> API & DAG
-    LOG --> API & DASH & DAG
-    PORTFOLIO --> API
-```
-
-**Write once, use everywhere:**
-A bug fix in `lib/auth/groups.py` is automatically applied to both the API and the Dash app in the same commit. No sync required.
-
----
-
-## Slide 7 — Branch-Based SDLC
+## Slide 5 — Branch-Based SDLC
 
 ```mermaid
 gitGraph
@@ -227,7 +158,7 @@ gitGraph
 
 ---
 
-## Slide 8 — CI/CD Pipeline Detail
+## Slide 6 — CI/CD Pipeline Detail
 
 ```mermaid
 flowchart TD
@@ -256,7 +187,7 @@ flowchart TD
 
 ---
 
-## Slide 9 — Centralized, Safe Configuration Management
+## Slide 7 — Centralized, Safe Configuration Management
 
 ```mermaid
 graph LR
@@ -299,7 +230,7 @@ graph LR
 
 ---
 
-## Slide 10 — Self-Hosted Airflow: The Right Choice
+## Slide 8 — Self-Hosted Airflow: The Right Choice
 
 ```mermaid
 graph TB
@@ -338,7 +269,7 @@ When a DAG is promoted from develop → uat → main, the live Airflow instance 
 
 ---
 
-## Slide 11 — OAuth2 + Entra SSO: Zero-Trust Access
+## Slide 9 — OAuth2 + Entra SSO: Zero-Trust Access
 
 ```mermaid
 sequenceDiagram
@@ -373,7 +304,7 @@ sequenceDiagram
 
 ---
 
-## Slide 12 — The Central Dev Server
+## Slide 10 — The Central Dev Server
 
 ```mermaid
 graph LR
@@ -407,7 +338,7 @@ graph LR
 
 ---
 
-## Slide 13 — GitHub: The AI-Ready Backbone
+## Slide 11 — GitHub: The AI-Ready Backbone
 
 ```mermaid
 graph TB
@@ -440,7 +371,7 @@ graph TB
 
 ---
 
-## Slide 14 — Security Model
+## Slide 12 — Security Model
 
 ```mermaid
 graph TD
@@ -483,7 +414,7 @@ graph TD
 
 ---
 
-## Slide 15 — Platform Endpoints Summary
+## Slide 13 — Platform Endpoints Summary
 
 **Three environments, consistent structure:**
 
@@ -507,7 +438,7 @@ graph TD
 
 ---
 
-## Slide 16 — Developer Experience: Day in the Life
+## Slide 14 — Developer Experience: Day in the Life
 
 ```mermaid
 sequenceDiagram
@@ -542,7 +473,7 @@ sequenceDiagram
 
 ---
 
-## Slide 17 — Operational Scripts
+## Slide 15 — Operational Scripts
 
 **Everything is scripted. Nothing requires the Azure portal.**
 
@@ -563,7 +494,7 @@ sequenceDiagram
 
 ---
 
-## Slide 18 — Cost Architecture
+## Slide 16 — Cost Architecture
 
 ```mermaid
 pie title Monthly Infrastructure Cost (approximate)
@@ -588,7 +519,7 @@ pie title Monthly Infrastructure Cost (approximate)
 
 ---
 
-## Slide 19 — Why This Architecture Scales
+## Slide 17 — Why This Architecture Scales
 
 **Today (single-node demo cluster):**
 - 1 × ARM64 node running dev + UAT + prod simultaneously
@@ -610,7 +541,7 @@ graph LR
 
 ---
 
-## Slide 20 — Key Takeaways
+## Slide 18 — Key Takeaways
 
 **The mono-repo approach delivers:**
 
@@ -630,7 +561,7 @@ graph LR
 
 ---
 
-## Slide 21 — Thank You
+## Slide 19 — Thank You
 
 **EQ Tech Platform Stack**
 
