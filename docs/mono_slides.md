@@ -9,7 +9,7 @@
 
 - Teams using Azure Repos — a stable but maintenance-mode platform receiving no major new features
 - Multiple disconnected repositories — no shared code, no shared standards
-- Manual deployments with undocumented steps
+- CI/CD pipelines exist but are tightly coupled to Azure DevOps — no portability, no OIDC, credentials stored as pipeline variables
 - Secrets scattered across machines and developer laptops
 - No consistent environments between dev, UAT, and production
 - Data pipelines, APIs, and dashboards maintained by separate teams with no shared contracts
