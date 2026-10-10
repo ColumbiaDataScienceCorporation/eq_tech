@@ -211,7 +211,7 @@ A bug fix in `lib/auth/groups.py` is automatically applied to both the API and t
 
 ---
 
-## Slide 6 — Branch-Based SDLC
+## Slide 7 — Branch-Based SDLC
 
 ```mermaid
 gitGraph
@@ -249,7 +249,7 @@ gitGraph
 
 ---
 
-## Slide 7 — CI/CD Pipeline Detail
+## Slide 8 — CI/CD Pipeline Detail
 
 ```mermaid
 flowchart TD
@@ -278,7 +278,7 @@ flowchart TD
 
 ---
 
-## Slide 8 — Centralized, Safe Configuration Management
+## Slide 9 — Centralized, Safe Configuration Management
 
 ```mermaid
 graph LR
@@ -321,7 +321,7 @@ graph LR
 
 ---
 
-## Slide 9 — Self-Hosted Airflow: The Right Choice
+## Slide 10 — Self-Hosted Airflow: The Right Choice
 
 ```mermaid
 graph TB
@@ -360,7 +360,7 @@ When a DAG is promoted from develop → uat → main, the live Airflow instance 
 
 ---
 
-## Slide 10 — OAuth2 + Entra SSO: Zero-Trust Access
+## Slide 11 — OAuth2 + Entra SSO: Zero-Trust Access
 
 ```mermaid
 sequenceDiagram
@@ -395,7 +395,7 @@ sequenceDiagram
 
 ---
 
-## Slide 11 — The Central Dev Server
+## Slide 12 — The Central Dev Server
 
 ```mermaid
 graph LR
@@ -429,7 +429,7 @@ graph LR
 
 ---
 
-## Slide 12 — GitHub: The AI-Ready Backbone
+## Slide 13 — GitHub: The AI-Ready Backbone
 
 ```mermaid
 graph TB
@@ -462,7 +462,7 @@ graph TB
 
 ---
 
-## Slide 13 — Security Model
+## Slide 14 — Security Model
 
 ```mermaid
 graph TD
@@ -505,7 +505,7 @@ graph TD
 
 ---
 
-## Slide 14 — Platform Endpoints Summary
+## Slide 15 — Platform Endpoints Summary
 
 **Three environments, consistent structure:**
 
@@ -529,7 +529,7 @@ graph TD
 
 ---
 
-## Slide 15 — Developer Experience: Day in the Life
+## Slide 16 — Developer Experience: Day in the Life
 
 ```mermaid
 sequenceDiagram
@@ -564,7 +564,7 @@ sequenceDiagram
 
 ---
 
-## Slide 16 — Operational Scripts
+## Slide 17 — Operational Scripts
 
 **Everything is scripted. Nothing requires the Azure portal.**
 
@@ -585,7 +585,7 @@ sequenceDiagram
 
 ---
 
-## Slide 17 — Cost Architecture
+## Slide 18 — Cost Architecture
 
 ```mermaid
 pie title Monthly Infrastructure Cost (approximate)
@@ -610,7 +610,7 @@ pie title Monthly Infrastructure Cost (approximate)
 
 ---
 
-## Slide 18 — Why This Architecture Scales
+## Slide 19 — Why This Architecture Scales
 
 **Today (single-node demo cluster):**
 - 1 × ARM64 node running dev + UAT + prod simultaneously
@@ -632,7 +632,7 @@ graph LR
 
 ---
 
-## Slide 19 — Key Takeaways
+## Slide 20 — Key Takeaways
 
 **The mono-repo approach delivers:**
 
@@ -652,7 +652,7 @@ graph LR
 
 ---
 
-## Slide 20 — Thank You
+## Slide 21 — Thank You
 
 **EQ Tech Platform Stack**
 
