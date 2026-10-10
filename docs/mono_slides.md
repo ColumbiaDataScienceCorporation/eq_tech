@@ -1,4 +1,5 @@
 # Modern Financial Engineering on Azure AKS
+
 ## A Mono-Repo, AI-Ready, Cloud-Native Architecture
 
 ---
@@ -32,15 +33,15 @@
 
 **The strategic choice:**
 
-| Dimension | GitHub Enterprise | Azure Repos |
-|-----------|-------------------|-------------|
-| Microsoft investment | **Primary innovation engine** — AI, security, velocity | Maintenance mode — security patches only |
-| AI assistance | **Native GitHub Copilot** — full repo context | No native AI; requires extensions |
-| Security | **GHAS** — secret scanning, dependency alerts, code scanning | Basic branch policies and PR approvals |
-| Cloud portability | **Cloud-agnostic** — runs on Azure, AWS, GCP, on-prem | Locked into Azure DevOps ecosystem |
-| CI/CD | **GitHub Actions** — OIDC federation, 50K+ marketplace actions | Azure Pipelines — tightly coupled to Azure |
-| Talent market | Overwhelmingly preferred by quant/data engineers | Familiar to traditional enterprise teams |
-| ADF/Synapse | Requires GitHub App setup | Native one-click visual integration |
+| Dimension            | GitHub Enterprise                                                     | Azure Repos                                 |
+| -------------------- | --------------------------------------------------------------------- | ------------------------------------------- |
+| Microsoft investment | **Primary innovation engine** — AI, security, velocity         | Maintenance mode — security patches only   |
+| AI assistance        | **Native GitHub Copilot** — full repo context                  | No native AI; requires extensions           |
+| Security             | **GHAS** — secret scanning, dependency alerts, code scanning   | Basic branch policies and PR approvals      |
+| Cloud portability    | **Cloud-agnostic** — runs on Azure, AWS, GCP, on-prem          | Locked into Azure DevOps ecosystem          |
+| CI/CD                | **GitHub Actions** — OIDC federation, 50K+ marketplace actions | Azure Pipelines — tightly coupled to Azure |
+| Talent market        | Overwhelmingly preferred by quant/data engineers                      | Familiar to traditional enterprise teams    |
+| ADF/Synapse          | Requires GitHub App setup                                             | Native one-click visual integration         |
 
 **Why GitHub wins for a quant platform:**
 
@@ -49,7 +50,7 @@
 3. **AI velocity** — GitHub Copilot with full mono-repo context accelerates quant research, DAG authoring, and infrastructure work
 4. **Talent attraction** — Top quant analysts and engineers overwhelmingly prefer GitHub over Azure DevOps
 
-> **The only advantage Azure Repos retains:** Visual drag-and-drop Azure Data Factory / Synapse pipeline authoring with one-click Git commit.  
+> **The only advantage Azure Repos retains:** Visual drag-and-drop Azure Data Factory / Synapse pipeline authoring with one-click Git commit.
 > If your engineers write code rather than drag pipelines, GitHub wins.
 
 ---
@@ -99,16 +100,26 @@ graph TB
 
 **One repository contains everything the platform needs**
 
-| Layer | Location in repo |
-|-------|-----------------|
-| Shared libraries | `lib/` |
-| Applications | `apps/api/`, `apps/ui-dash/`, `apps/ui-web/` |
-| DAGs | `data/airflow/dags/` |
-| Kubernetes manifests | `k8s/` |
-| Helm values (per env) | `infra/helm/airflow-values/` |
-| CI/CD workflows | `.github/workflows/` |
-| Scripts | `scripts/` |
-| Tests | `tests/` |
+| Layer                 | Location in repo                                   |
+| --------------------- | -------------------------------------------------- |
+| Shared libraries      | `lib/`                                           |
+| Applications          | `apps/api/`, `apps/ui-dash/`, `apps/ui-web/` |
+| DAGs                  | `data/airflow/dags/`                             |
+| Kubernetes manifests  | `k8s/`                                           |
+| Helm values (per env) | `infra/helm/airflow-values/`                     |
+| CI/CD workflows       | `.github/workflows/`                             |
+| Scripts               | `scripts/`                                       |
+| Tests                 | `tests/`                                         |
+
+**Shared Libraries — `lib/`**
+
+| Module | What it provides | Used by |
+|--------|-----------------|---------|
+| `lib/config/settings.py` | Pydantic settings · env-aware Postgres URL · Key Vault URL · group IDs | API · Dash · DAGs |
+| `lib/auth/groups.py` | `FlaskGroupAuth` · `require_groups()` · `X-Auth-Request-Groups` parsing | API · Dash |
+| `lib/db/` | SQLAlchemy sessions · `PortfolioPosition` model · `health_check()` | API · DAGs |
+| `lib/logging/structured.py` | Structured JSON logger · `*args/**kwargs` support | API · Dash · DAGs |
+| `lib/portfolio/metrics.py` | `summarise_positions()` · P&L · market value · weights | API |
 
 **Key benefits**
 
@@ -145,13 +156,14 @@ gitGraph
 
 **Each branch maps to an environment:**
 
-| Branch | Environment | Trigger |
-|--------|-------------|---------|
-| `develop` | **dev** | Any merge to develop |
-| `uat` | **UAT** | Promote develop → uat |
-| `main` | **prod** | Promote uat → main |
+| Branch      | Environment    | Trigger                |
+| ----------- | -------------- | ---------------------- |
+| `develop` | **dev**  | Any merge to develop   |
+| `uat`     | **UAT**  | Promote develop → uat |
+| `main`    | **prod** | Promote uat → main    |
 
 **Branch protection rules ensure:**
+
 - PRs required with at least 1 reviewer
 - All CI checks must pass before merge
 - No direct pushes to `main` or `uat`
@@ -223,6 +235,7 @@ graph LR
 ```
 
 **Key principles:**
+
 - `SecretStr` type — secrets never appear in logs or stack traces
 - Namespace isolation — dev pods only see dev secrets, prod pods only see prod secrets
 - Single `get_settings()` call works identically in all three environments
@@ -418,23 +431,23 @@ graph TD
 
 **Three environments, consistent structure:**
 
-| Path | Service | Auth |
-|------|---------|------|
-| `https://{env}/` | Web UI (React/Nginx) | Entra SSO |
-| `https://{env}/dash/` | Plotly Dash analytics | Entra SSO + group check |
-| `https://{env}/api/v1/me` | User identity | Entra SSO |
-| `https://{env}/api/v1/portfolio` | Portfolio data + P&L | Entra SSO + analysts/admins group |
-| `https://{env}/api/docs` | Swagger UI | Entra SSO |
-| `https://{env}/airflow/` | Airflow web UI | Entra SSO |
-| `https://{env}/oauth2/start` | Login entrypoint | — |
+| Path                               | Service               | Auth                              |
+| ---------------------------------- | --------------------- | --------------------------------- |
+| `https://{env}/`                 | Web UI (React/Nginx)  | Entra SSO                         |
+| `https://{env}/dash/`            | Plotly Dash analytics | Entra SSO + group check           |
+| `https://{env}/api/v1/me`        | User identity         | Entra SSO                         |
+| `https://{env}/api/v1/portfolio` | Portfolio data + P&L  | Entra SSO + analysts/admins group |
+| `https://{env}/api/docs`         | Swagger UI            | Entra SSO                         |
+| `https://{env}/airflow/`         | Airflow web UI        | Entra SSO                         |
+| `https://{env}/oauth2/start`     | Login entrypoint      | —                                |
 
 **Environment hostnames:**
 
-| Env | Hostname |
-|-----|----------|
-| Dev | `dev.eq-tech.52.185.94.105.nip.io` |
-| UAT | `uat.eq-tech.52.185.94.105.nip.io` |
-| Prod | `eq-tech.52.185.94.105.nip.io` |
+| Env  | Hostname                             |
+| ---- | ------------------------------------ |
+| Dev  | `dev.eq-tech.52.185.94.105.nip.io` |
+| UAT  | `uat.eq-tech.52.185.94.105.nip.io` |
+| Prod | `eq-tech.52.185.94.105.nip.io`     |
 
 ---
 
@@ -477,18 +490,18 @@ sequenceDiagram
 
 **Everything is scripted. Nothing requires the Azure portal.**
 
-| Script | Purpose |
-|--------|---------|
-| `resume-infra.ps1` | Start AKS node + PostgreSQL + refresh kubectl |
-| `pause-infra.ps1` | Stop all compute (saves ~$0.15/hr) |
-| `resume-devvm.ps1` | Start dev server, print SSH command |
-| `pause-devvm.ps1` | Deallocate dev server |
-| `check-infra-health.ps1` | Azure resources + k8s pods + HTTP endpoints status |
-| `setup-tls-oauth.ps1` | Deploy cert-manager + per-env oauth2-proxy + TLS |
-| `create-pg-secrets.ps1` | Provision k8s secrets from Key Vault |
+| Script                      | Purpose                                                  |
+| --------------------------- | -------------------------------------------------------- |
+| `resume-infra.ps1`        | Start AKS node + PostgreSQL + refresh kubectl            |
+| `pause-infra.ps1`         | Stop all compute (saves ~$0.15/hr)                       |
+| `resume-devvm.ps1`        | Start dev server, print SSH command                      |
+| `pause-devvm.ps1`         | Deallocate dev server                                    |
+| `check-infra-health.ps1`  | Azure resources + k8s pods + HTTP endpoints status       |
+| `setup-tls-oauth.ps1`     | Deploy cert-manager + per-env oauth2-proxy + TLS         |
+| `create-pg-secrets.ps1`   | Provision k8s secrets from Key Vault                     |
 | `configure-entra-app.ps1` | Set up Entra app registration + k8s oauth2-proxy secrets |
-| `port-forward.ps1` | Local dev access to all services |
-| `test-endpoints.ps1` | Smoke-test all 12 service endpoints |
+| `port-forward.ps1`        | Local dev access to all services                         |
+| `test-endpoints.ps1`      | Smoke-test all 12 service endpoints                      |
 
 **Result:** Any engineer can operate the entire platform with no Azure portal access required.
 
@@ -508,6 +521,7 @@ pie title Monthly Infrastructure Cost (approximate)
 ```
 
 **Cost optimization built in:**
+
 - ARM64 nodes (D4pls_v5) — 30% cheaper than equivalent x86
 - PostgreSQL Flexible Server B1ms — smallest tier for dev workloads
 - AKS Free tier — no control plane cost
@@ -522,6 +536,7 @@ pie title Monthly Infrastructure Cost (approximate)
 ## Slide 17 — Why This Architecture Scales
 
 **Today (single-node demo cluster):**
+
 - 1 × ARM64 node running dev + UAT + prod simultaneously
 - All services co-located with resource limits enforced
 - Adequate for development and stakeholder demos
@@ -554,6 +569,7 @@ graph LR
 7. **Cost control** — ARM64 nodes, pause scripts, and per-environment resource limits keep costs predictable
 
 **The platform demonstrates that financial engineering infrastructure can be:**
+
 - **Professional** — TLS everywhere, Entra SSO, audit trails
 - **Affordable** — ~$175/month for 3 full environments
 - **Maintainable** — 22 automated tests, shared libraries, documented scripts
@@ -565,23 +581,23 @@ graph LR
 
 **EQ Tech Platform Stack**
 
-| Layer | Technology |
-|-------|-----------|
-| Cloud | Microsoft Azure (centralus) |
-| Compute | AKS (ARM64) + Azure VM |
-| Container Registry | Azure Container Registry |
-| Database | PostgreSQL 16 Flexible Server |
-| Secret Management | Azure Key Vault |
-| Identity | Entra ID + oauth2-proxy |
-| Ingress | NGINX Ingress Controller + cert-manager |
-| Orchestration | Apache Airflow 2.11 (Helm) |
-| API | FastAPI + SQLAlchemy |
-| Dashboard | Plotly Dash |
-| CI/CD | GitHub Actions (OIDC) |
-| IaC | Terraform |
-| Language | Python 3.12 |
-| Config | Pydantic Settings |
-| AI Tooling | GitHub Copilot (Claude Sonnet) |
+| Layer              | Technology                              |
+| ------------------ | --------------------------------------- |
+| Cloud              | Microsoft Azure (centralus)             |
+| Compute            | AKS (ARM64) + Azure VM                  |
+| Container Registry | Azure Container Registry                |
+| Database           | PostgreSQL 16 Flexible Server           |
+| Secret Management  | Azure Key Vault                         |
+| Identity           | Entra ID + oauth2-proxy                 |
+| Ingress            | NGINX Ingress Controller + cert-manager |
+| Orchestration      | Apache Airflow 2.11 (Helm)              |
+| API                | FastAPI + SQLAlchemy                    |
+| Dashboard          | Plotly Dash                             |
+| CI/CD              | GitHub Actions (OIDC)                   |
+| IaC                | Terraform                               |
+| Language           | Python 3.12                             |
+| Config             | Pydantic Settings                       |
+| AI Tooling         | GitHub Copilot (Claude Sonnet)          |
 
 **Repository:** `github.com/ColumbiaDataScienceCorporation/eq_tech`
 
