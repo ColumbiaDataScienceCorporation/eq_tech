@@ -89,44 +89,34 @@ graph TB
 ## Slide 3 — Architecture Overview (App Developer Perspective)
 
 ```mermaid
-graph LR
-    subgraph Mono-Repo["eq_tech mono-repo (GitHub)"]
-        direction TB
-        LIB[lib/\nconfig · auth · db · logging\nportfolio · metrics]
-        APPS[apps/\napi · ui-dash · ui-web]
-        DAGS[data/airflow/dags/\ndaily_etl_dag.py]
-        K8S[k8s/\ningress · apps manifests]
-        HELM[infra/helm/\nairflow-values/dev|uat|prod]
-        REQS[requirements/\nbase · dev · prod]
-        CI[.github/workflows/\nlint-test · apps-ci\nairflow-helm-deploy · infra-ci]
+graph TB
+    subgraph Repo["eq_tech mono-repo"]
+        LIB["lib/\nconfig · auth · db · logging · portfolio"]
+        APPS["apps/\napi · ui-dash · ui-web"]
+        DAGS["data/airflow/dags/\ndaily_etl_dag.py"]
+        K8S["k8s/ and infra/helm/"]
+        CI[".github/workflows/"]
+    end
+
+    subgraph Pipeline["CI/CD Pipeline"]
+        LINT["1. Lint + 22 Tests"]
+        BUILD["2. Multi-arch Docker Build\nlinux/amd64 + linux/arm64"]
+        DEPLOY["3. kubectl apply\nper-env namespace"]
+    end
+
+    subgraph Envs["Live Environments"]
+        DEV_ENV["dev environment"]
+        UAT_ENV["uat environment"]
+        PROD_ENV["prod environment"]
     end
 
     LIB -->|imported by| APPS
     LIB -->|imported by| DAGS
-    APPS -->|built & pushed| ACR[ACR Images]
-    CI -->|triggers on branch| PIPELINE
-
-    subgraph PIPELINE["CI/CD Pipeline"]
-        direction TB
-        LINT[1. Lint + 22 Tests]
-        BUILD[2. Build multi-arch Docker\nlinux/amd64 + linux/arm64]
-        DEPLOY[3. kubectl apply\nper-env namespace]
-    end
-
+    CI -->|triggers| LINT
     LINT --> BUILD --> DEPLOY
-
-    DEPLOY -->|develop branch| DEV_ENV[dev environment]
-    DEPLOY -->|uat branch| UAT_ENV[uat environment]
-    DEPLOY -->|main branch| PROD_ENV[prod environment]
-
-    subgraph Each_Env["Each environment gets"]
-        direction TB
-        E1[Airflow — DAG execution]
-        E2[FastAPI — REST API + Swagger]
-        E3[Dash — Analytics Dashboard]
-        E4[Web UI — Static portal]
-        E5[oauth2-proxy — Entra SSO]
-    end
+    DEPLOY -->|develop branch| DEV_ENV
+    DEPLOY -->|uat branch| UAT_ENV
+    DEPLOY -->|main branch| PROD_ENV
 ```
 
 ---
@@ -194,23 +184,23 @@ A bug fix in `lib/auth/groups.py` is automatically applied to both the API and t
 
 ```mermaid
 gitGraph
-   commit id: "feat: new DAG"
+   commit id: "initial"
+   branch develop
+   checkout develop
    branch feature/new-dag
    checkout feature/new-dag
    commit id: "add DAG logic"
    commit id: "add tests"
-   checkout main
-   branch develop
    checkout develop
-   merge feature/new-dag id: "PR: feature → develop"
-   commit id: "CI deploys to DEV"
+   merge feature/new-dag id: "merge feature"
+   commit id: "deploy to DEV"
    branch uat
    checkout uat
-   merge develop id: "PR: develop → uat"
-   commit id: "CI deploys to UAT"
+   merge develop id: "promote to UAT"
+   commit id: "deploy to UAT"
    checkout main
-   merge uat id: "PR: uat → main"
-   commit id: "CI deploys to PROD"
+   merge uat id: "promote to PROD"
+   commit id: "deploy to PROD"
 ```
 
 **Each branch maps to an environment:**
@@ -446,31 +436,38 @@ graph TB
 ```mermaid
 graph TD
     subgraph Network["Network Security"]
-        LB[Azure LB\n52.185.94.105\nHTTPS only port 443]
-        NSG[NSG Rules\nAllow Internet → LB only\nNo direct node access]
-        TLS[Let's Encrypt TLS\nauto-renewed by cert-manager\nHTTP-01 via NGINX]
+        LB["Azure LB - port 443 only\nPublic IP 52.185.94.105"]
+        NSG["NSG Rules\nAllow Internet to LB only"]
+        TLS["Let's Encrypt TLS\nauto-renewed by cert-manager"]
     end
 
-    subgraph Identity["Identity & Access"]
-        ENTRA2[Entra ID\nAzureADandPersonalMicrosoftAccount\ntenant-specific OIDC endpoint]
-        GROUPS[Security Group RBAC\nanalysts · admins · risk · pm\nObject IDs in Entra]
-        OIDC[OIDC Federation\nGitHub Actions → Azure\nNo stored credentials]
+    subgraph Identity["Identity and Access"]
+        ENTRA2["Entra ID\ntenant-specific OIDC"]
+        GROUPS["Security Group RBAC\nanalysts / admins / risk"]
+        OIDC["OIDC Federation\nGitHub Actions to Azure"]
     end
 
     subgraph Secrets["Secret Management"]
-        KV2[Azure Key Vault\nAll production secrets\nIAM-controlled access]
-        K8S_SEC[Kubernetes Secrets\nnamespace-isolated\nnever in git]
-        SECRET_STR[Pydantic SecretStr\nNever logged or printed\nget_secret_value() explicit]
+        KV2["Azure Key Vault\nAll production secrets"]
+        K8S_SEC["Kubernetes Secrets\nnamespace-isolated"]
+        SECRET_STR["Pydantic SecretStr\nnever logged or printed"]
     end
 
     subgraph Runtime["Runtime Isolation"]
-        NS[Kubernetes Namespaces\ndev-apps · uat-apps · prod-apps\ndev-auth · uat-auth · prod-auth]
-        POD[Pod identity\nWorkload Identity\nper-namespace service accounts]
+        NS["Kubernetes Namespaces\ndev / uat / prod isolated"]
+        POD["Workload Identity\nper-namespace service accounts"]
     end
 
-    LB --> Identity
-    Identity --> Secrets
-    Secrets --> Runtime
+    LB --> ENTRA2
+    NSG --> LB
+    TLS --> LB
+    ENTRA2 --> GROUPS
+    ENTRA2 --> OIDC
+    GROUPS --> KV2
+    KV2 --> K8S_SEC
+    K8S_SEC --> SECRET_STR
+    K8S_SEC --> NS
+    NS --> POD
 ```
 
 **Defense in depth:** Every layer has its own security boundary. A compromised dev pod cannot access prod secrets. A compromised prod pod cannot SSH to the dev server.
