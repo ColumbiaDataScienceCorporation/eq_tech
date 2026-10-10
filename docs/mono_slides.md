@@ -59,39 +59,34 @@
 ```mermaid
 graph TB
     Browser[Browser / API Client]
-    GitHub[GitHub Enterprise]
-    LE[Let's Encrypt ACME]
 
-    subgraph Ingress["Ingress Layer (AKS)"]
-        NGINX[NGINX LB: 52.185.94.105]
+    subgraph Ingress["Ingress Layer"]
+        NGINX[NGINX LB 52.185.94.105]
+        PROXY[oauth2-proxy]
         CM[cert-manager]
-        PROXY[oauth2-proxy dev/uat/prod]
     end
 
-    subgraph Namespaces["App Namespaces (dev / uat / prod)"]
-        AIRFLOW[Airflow scheduler+webserver+triggerer]
+    subgraph Apps["App Namespaces - dev / uat / prod"]
+        AIRFLOW[Airflow]
         API[FastAPI]
         DASH[Dash]
         WEB[Web UI]
     end
 
-    subgraph AzureServices["Azure Services"]
+    subgraph Azure["Azure Services"]
         ACR[Container Registry]
         PG[PostgreSQL]
         KV[Key Vault]
         ENTRA[Entra ID]
-        DEVVM[Dev Server]
     end
 
-    Browser -->|HTTPS| NGINX
-    NGINX --> PROXY -->|OIDC| ENTRA
+    Browser --> NGINX
+    NGINX --> PROXY --> ENTRA
     NGINX --> AIRFLOW & API & DASH & WEB
-    CM -->|HTTP-01| LE
-    GitHub -->|OIDC push| ACR
-    ACR --> Namespaces
+    CM -->|TLS| NGINX
+    ACR -->|images| Apps
     API & AIRFLOW --> PG
-    KV -.->|secrets| Namespaces
-    DEVVM -.->|kubectl| Namespaces
+    KV -.->|secrets| Apps
 ```
 
 ---
