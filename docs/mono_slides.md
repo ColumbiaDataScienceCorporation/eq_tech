@@ -113,13 +113,13 @@ graph TB
 
 **Shared Libraries — `lib/`**
 
-| Module | What it provides | Used by |
-|--------|-----------------|---------|
-| `lib/config/settings.py` | Pydantic settings · env-aware Postgres URL · Key Vault URL · group IDs | API · Dash · DAGs |
-| `lib/auth/groups.py` | `FlaskGroupAuth` · `require_groups()` · `X-Auth-Request-Groups` parsing | API · Dash |
-| `lib/db/` | SQLAlchemy sessions · `PortfolioPosition` model · `health_check()` | API · DAGs |
-| `lib/logging/structured.py` | Structured JSON logger · `*args/**kwargs` support | API · Dash · DAGs |
-| `lib/portfolio/metrics.py` | Example business logic · `summarise_positions()` · P&L · market value · weights | API |
+| Module | Purpose | Used by |
+|--------|---------|---------|
+| `lib/config` | Environment-aware settings · Postgres URL · Key Vault URL · Entra group IDs | API · Dash · DAGs |
+| `lib/auth` | Entra group RBAC · Flask and FastAPI auth helpers · header parsing | API · Dash |
+| `lib/db` | SQLAlchemy sessions · ORM models · database health check | API · DAGs |
+| `lib/logging` | Structured JSON logger with consistent format across services | API · Dash · DAGs |
+| `lib/portfolio` | Example business logic layer (P&L, position analytics — replace with real models) | API |
 
 **Key benefits**
 
