@@ -5,25 +5,56 @@
 
 ## Slide 1 — The Problem We Solved
 
-**Before: Fragmented Infrastructure**
+**Before: Fragmented Infrastructure (Azure Repos + Azure DevOps)**
 
+- Teams using Azure Repos — a stable but maintenance-mode platform receiving no major new features
 - Multiple disconnected repositories — no shared code, no shared standards
 - Manual deployments with undocumented steps
 - Secrets scattered across machines and developer laptops
 - No consistent environments between dev, UAT, and production
 - Data pipelines, APIs, and dashboards maintained by separate teams with no shared contracts
+- No native AI assistance — Azure Repos lacks built-in Copilot integration
 - New developers took weeks to onboard
 
-**After: One Repo, One Truth, Three Environments**
+**After: One Repo, One Truth, Three Environments — on GitHub Enterprise**
 
-- Single GitHub repo governs everything: code, infrastructure, config, CI/CD
+- Single GitHub Enterprise repo governs everything: code, infrastructure, config, CI/CD
 - Push to a branch → environment is updated automatically
 - All credentials live in Azure Key Vault — no secrets ever touch a laptop
 - Dev, UAT, and prod are structurally identical — what works in dev ships to prod
+- GitHub Copilot natively integrated — AI assistance across every file in context
 
 ---
 
-## Slide 2 — Architecture Overview (Infrastructure Perspective)
+## Slide 2 — Why GitHub Enterprise over Azure Repos?
+
+**Current state:** Most teams use Azure Repos + Azure Pipelines (Azure DevOps)
+
+**The strategic choice:**
+
+| Dimension | GitHub Enterprise | Azure Repos |
+|-----------|-------------------|-------------|
+| Microsoft investment | **Primary innovation engine** — AI, security, velocity | Maintenance mode — security patches only |
+| AI assistance | **Native GitHub Copilot** — full repo context | No native AI; requires extensions |
+| Security | **GHAS** — secret scanning, dependency alerts, code scanning | Basic branch policies and PR approvals |
+| Cloud portability | **Cloud-agnostic** — runs on Azure, AWS, GCP, on-prem | Locked into Azure DevOps ecosystem |
+| CI/CD | **GitHub Actions** — OIDC federation, 50K+ marketplace actions | Azure Pipelines — tightly coupled to Azure |
+| Talent market | Overwhelmingly preferred by quant/data engineers | Familiar to traditional enterprise teams |
+| ADF/Synapse | Requires GitHub App setup | Native one-click visual integration |
+
+**Why GitHub wins for a quant platform:**
+
+1. **Portability** — Not locked into Azure; runners can execute inside AWS, GCP, or on-prem without re-architecture
+2. **Protecting alpha models** — GHAS secret scanning blocks accidental credential commits before they leave the developer's machine
+3. **AI velocity** — GitHub Copilot with full mono-repo context accelerates quant research, DAG authoring, and infrastructure work
+4. **Talent attraction** — Top quant analysts and engineers overwhelmingly prefer GitHub over Azure DevOps
+
+> **The only advantage Azure Repos retains:** Visual drag-and-drop Azure Data Factory / Synapse pipeline authoring with one-click Git commit.  
+> If your engineers write code rather than drag pipelines, GitHub wins.
+
+---
+
+## Slide 3 — Architecture Overview (Infrastructure Perspective)
 
 ```mermaid
 graph TB
@@ -86,7 +117,7 @@ graph TB
 
 ---
 
-## Slide 3 — Architecture Overview (App Developer Perspective)
+## Slide 4 — Architecture Overview (App Developer Perspective)
 
 ```mermaid
 graph TB
