@@ -68,7 +68,7 @@ graph TB
         PROXY[oauth2-proxy dev/uat/prod]
     end
 
-    subgraph Namespaces["App Namespaces (dev / uat / prod)"]
+    subgraph Namespaces["App Namespaces — dev / uat / prod"]
         AIRFLOW[Airflow scheduler+webserver+triggerer]
         API[FastAPI]
         DASH[Dash]
