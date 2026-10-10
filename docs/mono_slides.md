@@ -152,7 +152,7 @@ graph TB
 
 ---
 
-## Slide 4 — Why Mono-Repo?
+## Slide 5 — Why Mono-Repo?
 
 **One repository contains everything the platform needs**
 
