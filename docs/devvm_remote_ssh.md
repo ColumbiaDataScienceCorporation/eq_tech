@@ -1,6 +1,30 @@
 # Connecting to the Dev VM via VS Code Remote-SSH
 
-## 1. Install the Extension
+## 0. Generate an SSH Key Pair (if you don't have one)
+
+Open a terminal and run:
+
+```powershell
+ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+```
+
+Accept the default location (`~/.ssh/id_rsa`) and optionally set a passphrase.
+
+This creates two files:
+- `~/.ssh/id_rsa` — **private key** (never share this)
+- `~/.ssh/id_rsa.pub` — **public key** (added to the VM)
+
+### Add your public key to the dev VM
+
+```powershell
+# Replace with your actual public key content
+$pubKey = Get-Content ~/.ssh/id_rsa.pub
+ssh devadmin@20.80.99.213 "mkdir -p ~/.ssh && echo '$pubKey' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+Or if your key was already configured when the VM was provisioned (via `scripts/provision-dev.ps1`), you can skip this step.
+
+---
 
 In VS Code, install **Remote - SSH** (Microsoft) from the Extensions marketplace.
 
