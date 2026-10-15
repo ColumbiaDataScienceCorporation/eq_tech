@@ -11,6 +11,7 @@ ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
 Accept the default location (`~/.ssh/id_rsa`) and optionally set a passphrase.
 
 This creates two files:
+
 - `~/.ssh/id_rsa` — **private key** (never share this)
 - `~/.ssh/id_rsa.pub` — **public key** (added to the VM)
 
